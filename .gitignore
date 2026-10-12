@@ -17,3 +17,8 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+data-test/
+
+web/test-results/
+web/playwright-report/
+dist-release/

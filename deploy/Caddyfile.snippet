@@ -1,0 +1,43 @@
+# Antlings site block. install.sh copies this to /etc/caddy/antlings.caddy with __DOMAIN__ replaced.
+# It never edits the main Caddyfile. Add this line to the main Caddyfile yourself, once:
+#
+#   import /etc/caddy/antlings.caddy
+#
+# Then: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+
+__DOMAIN__ {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Request rate limit for sign-in and setup. Stock Caddy has no rate limiter, and the module
+	# (github.com/mholt/caddy-ratelimit) needs an `order rate_limit before basicauth` line in the global options.
+	# Enable it by hand, remove the leading "#RL " and run `caddy validate`. The app's own lockout
+	# (5 failures, 15 minutes) works without it.
+	#RL @auth path /api/auth/* /api/setup/*
+	#RL rate_limit @auth {
+	#RL 	zone auth {
+	#RL 		key {remote_host}
+	#RL 		events 20
+	#RL 		window 1m
+	#RL 	}
+	#RL }
+
+	# WebSocket upgrades on /ws are proxied by reverse_proxy without extra settings.
+	# Caddy overwrites X-Forwarded-For with the real client address. The app trusts that header from 127.0.0.1 only.
+	# If you put Cloudflare in front, add the Cloudflare ranges with `trusted_proxies` in the global options,
+	# or every visitor shares one address and five failures lock everyone out. List only the Cloudflare ranges.
+	# Never use private_ranges or 0.0.0.0/0 there: that lets any client choose its own address.
+	# Bodies in this app are small JSON messages.
+	request_body {
+		max_size 256KB
+	}
+	reverse_proxy 127.0.0.1:3100 {
+		flush_interval -1
+	}
+}

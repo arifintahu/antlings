@@ -49,3 +49,19 @@ Observed on the VPS on 2026-10-12 with `@anthropic-ai/claude-agent-sdk` 0.3.296 
 - `task_progress` with a longer subagent, and `agentProgressSummaries`.
 - `resume` after a restart, and across folders (the docs say lookup spans folders from Claude Code 2.1.223).
 - Two sessions at once, and memory under that load.
+
+## Added during the build (2026-10-12, SDK 0.3.296, Windows and Linux)
+
+| Topic | Observed |
+|---|---|
+| Session id up front | `options.sessionId` takes a UUID, so Antlings creates the id before the first message. `options.resume` loads an existing one. |
+| Approval request fields | `canUseTool(name, input, opts)`: `opts.toolUseID`, `opts.title` (full prompt sentence), `opts.agentID` (set inside a subagent), `opts.signal`. The result may also be `null`. |
+| Linking an approval to an ant | The `tool_use` block arrives first with `parent_tool_use_id` of the Agent call. Antlings keeps a map from tool id to parent and sets `parentToolUseId` on the approval event. |
+| Bypass mode | Needs `allowDangerouslySkipPermissions: true` next to `permissionMode: 'bypassPermissions'`. |
+| Spend cap | `maxBudgetUsd` works as a per-process cap. The live test uses 0.10. |
+| `rate_limit_event` | The typed fields are `rate_limit_info.rateLimitType`, `utilization` (fraction), `resetsAt` (epoch seconds). No `unifiedWindows` in the 0.3.296 types. |
+| Plan usage in a live run | `usage_EXPERIMENTAL_...` reported unavailable in the live test on this Windows machine. The adapter returns `unavailable` on any failure or when `rate_limits_available` is false. |
+| Size | Each platform package of the SDK (`claude-agent-sdk-linux-x64` and friends) carries a 250 MB `claude` binary. The release build removes them, because the VPS uses its own binary through `pathToClaudeCodeExecutable`. |
+| Memory | Importing the SDK adds about 20 MB resident, so Antlings loads it on the first session. The `zod` v4 and `@simplewebauthn/server` imports cost about 16 and 15 MB; the latter is loaded on the first passkey request. |
+| Live turns | A tiny Haiku turn plus `getContextUsage` finished in about 3 seconds. Closing a session and resuming it with a new manager worked (`resume: id`, same folder). The test cleans up the stub folder under `~/.claude/projects`. |
+| `better-sqlite3` 13 | Ships prebuilt binaries for Linux, macOS and Windows inside the package. pnpm 9 still tries `node-gyp rebuild` unless the package is listed in `pnpm.neverBuiltDependencies` or scripts are skipped. |

@@ -1,0 +1,53 @@
+# Antlings: web UI for Claude Code. Installed to /etc/systemd/system/antlings.service by install.sh.
+[Unit]
+Description=Antlings (Claude Code web UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=antlings
+Group=antlings
+WorkingDirectory=/opt/antlings/current/app
+# Secrets live here (mode 640, root:antlings). The unit never prints them.
+EnvironmentFile=/etc/antlings/antlings.env
+Environment=NODE_ENV=production
+# A small young generation keeps the resident size of an idle service down.
+Environment=NODE_OPTIONS=--max-semi-space-size=1
+ExecStart=/usr/bin/node dist/main.js
+Restart=on-failure
+RestartSec=3
+# The service holds at most 2 running Claude Code sessions. 800M keeps it from starving the other
+# services on this 2 GB host. MemoryHigh throttles instead of killing.
+MemoryHigh=800M
+# MemoryHigh only throttles. MemoryMax is the hard stop so a runaway session cannot push the host into swap.
+MemoryMax=1100M
+OOMScoreAdjust=500
+Nice=10
+CPUWeight=50
+TasksMax=512
+
+# Sandbox. The agent runs inside this unit, so these limits apply to it too.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/antlings /home/antlings
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectProc=invisible
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# Other users' folders and the other services' data are not visible to the agent.
+InaccessiblePaths=-/root -/home/ubuntu -/etc/caddy -/var/lib/postgresql -/var/lib/redis -/var/backups
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

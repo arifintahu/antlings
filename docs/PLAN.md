@@ -1,6 +1,6 @@
 ---
 title: Antlings plan
-status: draft
+status: v0.1 built
 created: 2026-10-12
 updated: 2026-10-12
 tags: [antlings, plan]
@@ -95,50 +95,50 @@ Phone / laptop (PWA)
 
 - [x] Mockup with ant characters.
 - [x] SDK spike on the VPS, recorded in [[sdk-notes]].
-- [ ] Decisions [[0001-agent-sdk-backend]] and [[0002-authentication-and-trust-boundary]] reviewed.
-- [ ] Stack confirmed.
+- [x] Decisions [[0001-agent-sdk-backend]] and [[0002-authentication-and-trust-boundary]] reviewed (accepted at v0.1, see their threat-model notes).
+- [x] Stack confirmed in [[0004-stack]].
 
 ### Phase 1: sign in and one conversation
 
-- Owner can register a passkey from the server console and sign in with it.
-- Password plus one-time code works as a fallback.
-- Every route except the login page returns 401 without a valid session (route test).
-- A WebSocket upgrade without a valid Origin and ticket is refused (test).
-- Five failed sign-ins from one address block further attempts for 15 minutes (test).
-- One session streams text and tool calls, and Approve and Deny reach `canUseTool`.
-- The backend runs as the `antlings` user with no sudo.
+- [x] Owner can register a passkey from the server console and sign in with it (setup code from `antlings setup`; end-to-end test with a virtual passkey).
+- [x] Password plus one-time code works as a fallback (unit and end-to-end tests).
+- [x] Every route except the login page and its assets returns 401 without a valid session (route test enumerates the router, also encoded paths).
+- [x] A WebSocket upgrade without a valid Origin and ticket is refused (`ws.test.ts`, release smoke test).
+- [x] Five failed sign-ins from one address block further attempts for 15 minutes (fake-clock test, 30-request burst test, end-to-end test).
+- [x] One session streams text and tool calls, and Approve and Deny reach `canUseTool` (fake agent, end-to-end, one live turn).
+- [x] The backend runs as the `antlings` user with no sudo (installer refuses privileged groups; container install test). Not yet run on the VPS.
 
 ### Phase 2: session management
 
-- New session dialog: folder (browse and create), model, effort, mode.
-- The folder picker lists only folders inside the user's home, hides dot-folders, and rejects `..` and symlinks that leave the home (test).
-- Session list shows Active and Archived. Archive and unarchive use tags. Delete removes the transcript and asks for confirmation.
-- Resume a session after a backend restart and see the earlier messages.
-- Bypass mode and deleting a session ask for the passkey or code again.
+- [x] New session dialog: folder (browse and create), model, effort, mode.
+- [x] The folder picker lists only folders inside the user's home, hides dot-folders, and rejects `..` and symlinks that leave the home (38 tests, Windows and Linux).
+- [x] Session list shows Active and Archived. Archive and unarchive use tags. Delete removes the transcript and asks for confirmation plus a step-up.
+- [x] Resume a session after a backend restart and see the earlier messages (fake agent test, one live test, event log replay).
+- [x] Bypass mode and deleting a session ask for the passkey or code again (REST, WebSocket and end-to-end tests).
 
 ### Phase 3: ants, meters, limits
 
-- One ant per subagent with state, tokens and elapsed time.
-- Subagent view shows log, report and prompt. Follow-up resumes the subagent.
-- Stop works for one ant.
-- Context meter and plan usage update after each turn and when `rate_limit_event` arrives.
-- A third concurrent session is refused with a clear message.
+- [x] One ant per subagent with state, tokens and elapsed time.
+- [x] Subagent view shows log, report and prompt. Follow-up goes through the lead, which resumes the agent ([[DECISIONS]]).
+- [x] Stop works for one ant (`stopTask`, end-to-end test). Not yet seen against a real long subagent.
+- [x] Context meter updates after each turn. Plan usage updates after each turn and on `rate_limit_event`, and shows "unavailable" when the SDK says so.
+- [x] A third concurrent session is refused with a clear message.
 
 ### Phase 4: phone
 
-- Installable web app with an icon and a standalone window.
-- Web Push when an approval is waiting or a session finishes (needs the app added to the home screen on iOS).
-- Reconnect test: lock the phone for 5 minutes, unlock, and the page catches up with no duplicate events.
+- [x] Installable web app with an icon (drawn from the ant sprite) and a standalone manifest. Not yet installed on a real phone.
+- [x] Web Push when an approval is waiting or a session finishes, and on sign-in (server and service worker tested with a fake push service). Not yet tested on a real device or on iOS.
+- [x] Reconnect test: the page loses its connection, the server logs two events, the page reconnects and shows each once. A real 5-minute phone sleep is not tested.
 
 ## Risks and open questions
 
 | Item | Status |
 |---|---|
-| Terms for using a Claude subscription login behind a self-hosted web app | Not checked. Read the current terms before Phase 1. An API key avoids the question but removes the plan usage meter. |
+| Terms for using a Claude subscription login behind a self-hosted web app | Checked 2026-10-12, see [[0003-claude-login-terms]]. Default is an API key. Subscription mode sits behind a flag that is off. |
 | Plan usage API is marked experimental and may change | Wrap it in one adapter, pin the SDK version, show "unavailable" when it fails. |
-| `task_progress` events | Not seen yet. The test task finished in 2 seconds. Test with a longer subagent. |
-| Effect of `applyFlagSettings({ effortLevel })` | The call succeeds. The change in behavior has not been observed. |
+| `task_progress` events | Mapped and tested with recorded shapes. Not yet seen from a real long subagent. |
+| Effect of `applyFlagSettings({ effortLevel })` | Wired to the settings dialog. The UI says it applies from the next turn. Effect not observed. |
 | Passwordless sudo for `ubuntu` on the VPS | Observed. The agent must run as another user. That user needs its own Claude login. |
 | Postgres and Redis listen on all interfaces, `ufw` inactive | Check the cloud firewall. Not part of Antlings, but it raises the damage of a break-in. |
-| Memory pressure on the VPS | Measure again with two real sessions. Consider more swap or moving other services. |
+| Memory pressure on the VPS | Service idle is about 85 MB (measured in a container). Measure two real sessions on the VPS after deploy. |
 | Domain and trademark check for the name | Not done. npm and GitHub name search found no clash for "antlings". |
