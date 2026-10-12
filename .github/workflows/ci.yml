@@ -27,5 +27,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm test
+      # Build first: the server and web type checks read the compiled `shared` package.
       - run: pnpm build
+      - run: pnpm test
