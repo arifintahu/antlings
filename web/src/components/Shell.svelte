@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { STATE_LABEL } from '../ants/draw.js';
   import { counts, fmtK, isBusy, level } from '../lib/model.js';
-  import { MODES, showPath } from '../lib/options.js';
+  import { MODES, prettyModel, showPath } from '../lib/options.js';
   import { app, titleOf } from '../lib/store.svelte.js';
   import AgentDetail from './AgentDetail.svelte';
   import Conversation from './Conversation.svelte';
@@ -65,6 +65,7 @@
   // Keep the newest message in view unless the reader scrolled up.
   $effect(() => {
     void view?.lastSeq;
+    void view?.streaming; // follow the answer while it is written
     void app.focus;
     const el = chatEl;
     if (!el) return;
@@ -87,6 +88,8 @@
     );
     if (!sent) return; // keep the text so it is not lost
     prompt = '';
+    // Sending is an action of the reader: show the new message and the answer, wherever the view was.
+    void tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight));
     if (ant) app.focus = 'lead';
   }
 
@@ -142,7 +145,7 @@
   }
 
   const modeLabel = $derived(MODES.find(([m]) => m === view?.mode)?.[1] ?? 'Ask');
-  const modelLabel = $derived(app.models.find((m) => m.value === view?.model)?.displayName ?? view?.model ?? '');
+  const modelLabel = $derived(app.models.find((m) => m.value === view?.model)?.displayName ?? prettyModel(view?.model ?? ''));
   const cost = $derived(view && view.costUsd > 0 ? `$${view.costUsd < 0.01 ? view.costUsd.toFixed(4) : view.costUsd.toFixed(2)}` : '');
 
   function startRename() {

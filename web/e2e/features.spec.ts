@@ -24,6 +24,8 @@ test('answers stream in and end as one formatted message', async ({ page }) => {
   await say(page, 'stream');
   await expect(page.locator('.msg.agent').filter({ hasText: 'Hello world' })).toHaveCount(1);
   await expect(page.locator('.msg.streaming')).toHaveCount(0);
+  const gap = await page.locator('#chat').evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+  expect(gap).toBeLessThan(8); // the newest message is in view
 });
 
 test('markdown renders as text nodes, and unsafe links are not links', async ({ page }) => {

@@ -48,5 +48,11 @@ export function saveLast(c: LastChoice): void {
   }
 }
 
+/** "claude-haiku-4-5-20251001" becomes "Haiku 4.5". Unknown ids are returned as they are. */
+export function prettyModel(raw: string): string {
+  const m = /^claude-([a-z]+)-(\d+)-(\d+)(?:-\d{8})?$/.exec(raw);
+  return m ? `${m[1]!.charAt(0).toUpperCase()}${m[1]!.slice(1)} ${m[2]}.${m[3]}` : raw;
+}
+
 /** Folder paths are relative to the home folder of the service user. */
 export const showPath = (rel: string): string => (rel === '' ? '~' : `~/${rel}`);
