@@ -163,6 +163,28 @@ interface HistoryMessage {
   parent_tool_use_id: string | null;
 }
 
+const tag = (name: string): RegExp => new RegExp(`<${name}>([^]*?)</${name}>`, 'g');
+
+/**
+ * Claude Code's terminal stores slash commands and their output as tagged text. This turns
+ * `<command-name>/exit</command-name>...` into "/exit", drops caveats and system reminders,
+ * and returns local command output separately.
+ */
+export function cleanUserText(raw: string): { text: string; stdout: string } {
+  let t = raw.replace(tag('local-command-caveat'), '').replace(tag('system-reminder'), '');
+  const stdout = [...t.matchAll(tag('local-command-stdout'))]
+    .map((m) => m[1]!.trim())
+    .filter(Boolean)
+    .join(String.fromCharCode(10));
+  t = t.replace(tag('local-command-stdout'), '').replace(tag('local-command-stderr'), '');
+  const name = tag('command-name').exec(t)?.[1]?.trim();
+  if (name) {
+    const args = tag('command-args').exec(t)?.[1]?.trim() ?? '';
+    t = `${name} ${args}`.trim();
+  } else t = t.replace(tag('command-message'), '').replace(tag('command-args'), '');
+  return { text: t.trim(), stdout };
+}
+
 /** Converts transcript messages (from the SDK's session readers) to UI events, for sessions with no event log. */
 export function historyEvents(messages: HistoryMessage[], limit = 2000): UiEvent[] {
   const mapper = new EventMapper();
@@ -170,8 +192,9 @@ export function historyEvents(messages: HistoryMessage[], limit = 2000): UiEvent
   for (const m of messages) {
     const msg = m.message as { content?: unknown } | undefined;
     if (m.type === 'user' && !m.parent_tool_use_id) {
-      const text = textOf(msg?.content);
-      if (text) out.push({ k: 'user', text: clip(text, 20_000) });
+      const cleaned = cleanUserText(textOf(msg?.content));
+      if (cleaned.stdout) out.push({ k: 'notice', message: clip(cleaned.stdout, 2000) });
+      if (cleaned.text) out.push({ k: 'user', text: clip(cleaned.text, 20_000) });
     }
     if (m.type === 'user' || m.type === 'assistant') {
       for (const e of mapper.map(m as unknown as SDKMessage)) if (e.k !== 'state') out.push(e);
