@@ -44,6 +44,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (e.ANTLINGS_AUTH_MODE === 'subscription' && e.ANTLINGS_SUBSCRIPTION_OK !== '1') {
     throw new Error('subscription mode needs ANTLINGS_SUBSCRIPTION_OK=1 (see ADR 0003)');
   }
+  if (!['127.0.0.1', '::1', 'localhost'].includes(e.ANTLINGS_HOST)) {
+    throw new Error('ANTLINGS_HOST must be a loopback address; put Caddy in front');
+  }
+  if (env.NODE_ENV === 'production' && origin.protocol !== 'https:' && origin.hostname !== 'localhost') {
+    throw new Error('ANTLINGS_ORIGIN must be https in production');
+  }
   const key = e.ANTLINGS_SECRET_KEY ? Buffer.from(e.ANTLINGS_SECRET_KEY, 'base64') : undefined;
   if (!key || key.length !== 32) throw new Error('ANTLINGS_SECRET_KEY must be 32 bytes, base64 encoded');
   return {

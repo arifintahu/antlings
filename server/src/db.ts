@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
+import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export type Db = Database.Database;
@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS passkeys (
 CREATE TABLE IF NOT EXISTS fallback (
   id INTEGER PRIMARY KEY CHECK (id = 1), password_hash TEXT NOT NULL, totp_secret_enc TEXT NOT NULL,
   confirmed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS fallback_pending (
+  id INTEGER PRIMARY KEY CHECK (id = 1), password_hash TEXT NOT NULL, totp_secret_enc TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, csrf TEXT NOT NULL, created_at INTEGER NOT NULL,
@@ -32,6 +35,9 @@ CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEG
 CREATE TABLE IF NOT EXISTS event_log (
   session_id TEXT NOT NULL, seq INTEGER NOT NULL, at INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (session_id, seq)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS session_meta (
+  id TEXT PRIMARY KEY, cwd TEXT NOT NULL, model TEXT NOT NULL, effort TEXT, mode TEXT NOT NULL, created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL);
 `;
 
@@ -42,5 +48,14 @@ export function openDb(path: string): Db {
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA);
+  if (path !== ':memory:' && process.platform !== 'win32') {
+    for (const f of [path, `${path}-wal`, `${path}-shm`]) {
+      try {
+        chmodSync(f, 0o600);
+      } catch {
+        /* the file may not exist yet */
+      }
+    }
+  }
   return db;
 }

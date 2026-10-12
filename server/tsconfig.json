@@ -2,5 +2,5 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/testkit.ts"]
+  "exclude": ["src/**/*.test.ts", "src/testkit.ts", "src/fakeAgent.ts"]
 }

@@ -20,15 +20,18 @@ import {
   StepUpTotpBody,
   TotpLoginBody,
 } from '@antlings/shared';
-import { Auth, type NewSession, type SessionRow } from './auth/service.js';
+import { Auth, MAX_SESSION_MS, type NewSession, type SessionRow } from './auth/service.js';
+import { safeEqual } from './util.js';
 import { registerStatic } from './static.js';
 
 export const COOKIE_NAME = '__Host-antlings';
+const COOKIE_OPTS = { httpOnly: true, secure: true, sameSite: 'strict', path: '/' } as const;
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 declare module 'fastify' {
   interface FastifyRequest {
     sess?: SessionRow;
+    attemptId?: number;
   }
   interface FastifyContextConfig {
     public?: boolean;
@@ -86,6 +89,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   const headers = securityHeaders(config.origin);
   app.addHook('onSend', async (req, reply) => {
+    if (req.attemptId !== undefined && reply.statusCode < 400) auth.releaseAttempt(req.attemptId);
     for (const [k, v] of Object.entries(headers)) reply.header(k, v);
     if (req.url.startsWith('/api/') || req.url === '/health') reply.header('Cache-Control', 'no-store');
   });
@@ -102,12 +106,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const unsafe = UNSAFE.has(req.method);
     if (unsafe && req.headers.origin !== config.origin) return reply.code(403).send({ error: 'bad_origin' });
     const isPublic = req.routeOptions?.config?.public === true;
-    const path = req.url.split('?')[0] ?? '';
-    const needsSession = !isPublic && (path.startsWith('/api/') || path === '/ws' || req.method !== 'GET');
-    if (!needsSession) return;
+    // Default deny: only routes marked public skip the session check. The URL string is never consulted.
+    if (isPublic) return;
     const sess = auth.getSession(req.cookies[COOKIE_NAME]);
     if (!sess) return reply.code(401).send({ error: 'unauthorized' });
-    if (unsafe && req.headers['x-csrf-token'] !== sess.csrf)
+    if (unsafe && !safeEqual(String(req.headers['x-csrf-token'] ?? ''), sess.csrf))
       return reply.code(403).send({ error: 'bad_csrf' });
     req.sess = sess;
   });
@@ -121,7 +124,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const pub = { config: { public: true } };
   const locked = (req: FastifyRequest, reply: FastifyReply): boolean => {
     const ms = auth.lockedFor(req.ip);
-    if (ms <= 0) return false;
+    if (ms <= 0) {
+      // Count the attempt now; a successful reply gives it back (see the onSend hook).
+      req.attemptId = auth.reserveAttempt(req.ip);
+      return false;
+    }
     reply
       .header('Retry-After', String(Math.ceil(ms / 1000)))
       .code(429)
@@ -136,11 +143,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   };
   const startSession = (reply: FastifyReply, s: NewSession) => {
     reply.setCookie(COOKIE_NAME, s.cookie, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-      maxAge: Math.floor(auth.idleMs() / 1000),
+      ...COOKIE_OPTS,
+      maxAge: Math.floor(MAX_SESSION_MS / 1000),
     });
     return reply.send({ ok: true, csrf: s.csrf });
   };
@@ -234,7 +238,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.post('/api/auth/logout', async (req, reply) => {
     auth.revoke(req.sess!.short_id);
     auth.audit('signout', req.ip);
-    reply.clearCookie(COOKIE_NAME, { path: '/' });
+    reply.clearCookie(COOKIE_NAME, COOKIE_OPTS);
     return { ok: true };
   });
 
@@ -250,7 +254,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     if (!app.requireFresh(req, reply)) return;
     const n = auth.revokeAll();
     auth.audit('signout_all', req.ip, { count: n });
-    reply.clearCookie(COOKIE_NAME, { path: '/' });
+    reply.clearCookie(COOKIE_NAME, COOKIE_OPTS);
     return { ok: true, revoked: n };
   });
 
@@ -331,17 +335,22 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     if (!app.requireFresh(req, reply)) return;
     const b = body(FallbackSetBody, req, reply);
     if (!b) return;
-    return auth.setFallback(b.password);
+    return auth.setFallback(b.password, req.ip);
   });
 
   app.post('/api/security/fallback/confirm', async (req, reply) => {
+    if (!app.requireFresh(req, reply) || locked(req, reply)) return;
     const b = body(FallbackConfirmBody, req, reply);
     if (!b) return;
-    if (!auth.confirmFallback(b.code, req.ip)) return reply.code(400).send({ error: 'bad_code' });
+    if (!auth.confirmFallback(b.code, req.ip)) {
+      auth.recordFailure(req.ip, 'fallback-confirm');
+      return reply.code(400).send({ error: 'bad_code' });
+    }
     return { ok: true };
   });
 
   app.patch('/api/security/settings', async (req, reply) => {
+    if (!app.requireFresh(req, reply)) return;
     const b = body(SettingsBody, req, reply);
     if (!b) return;
     if (b.idleTimeoutHours !== undefined) auth.setSetting('idle_hours', String(b.idleTimeoutHours));

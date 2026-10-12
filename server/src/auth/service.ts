@@ -9,10 +9,12 @@ import type { StoredPasskey, WebAuthnService } from './webauthn.js';
 export const FRESH_MS = 5 * 60_000;
 export const LOCKOUT_MS = 15 * 60_000;
 export const MAX_FAILURES = 5;
+export const GLOBAL_MAX_FAILURES = 100;
 export const SETUP_CODE_MS = 15 * 60_000;
 const CHALLENGE_MS = 5 * 60_000;
 const PENDING_MS = 5 * 60_000;
 const TICKET_MS = 30_000;
+export const MAX_SESSION_MS = 30 * 86_400_000;
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 export interface SessionRow {
@@ -36,18 +38,25 @@ export interface NewSession {
 
 export class Auth {
   private dummyHash: Promise<string> | undefined;
+  private pendingTries = new Map<string, number>();
 
   constructor(
     readonly db: Db,
     readonly clock: Clock,
     readonly config: Config,
     readonly webauthn: WebAuthnService,
-    readonly log: (line: string) => void = (l) => console.error(l),
-  ) {}
+    log: (line: string) => void = (l) => console.error(l),
+  ) {
+    // Strip control characters so nothing can forge a second log line for fail2ban.
+    // eslint-disable-next-line no-control-regex
+    this.log = (line) => log(line.replace(/[\x00-\x1f\x7f]+/g, ' '));
+  }
+  readonly log: (line: string) => void;
 
   // ---- audit and settings ----
 
   audit(kind: string, ip: string | undefined, detail?: unknown): void {
+    this.db.prepare('DELETE FROM audit WHERE at < ?').run(this.clock.now() - 90 * 86_400_000);
     this.db
       .prepare('INSERT INTO audit (at, kind, ip, detail) VALUES (?, ?, ?, ?)')
       .run(this.clock.now(), kind, ip ?? null, detail === undefined ? null : JSON.stringify(redact(detail)));
@@ -84,38 +93,81 @@ export class Auth {
 
   // ---- rate limit ----
 
-  /** Milliseconds left on a lockout for this address, or 0. */
-  lockedFor(ip: string): number {
-    const row = this.db.prepare('SELECT until FROM lockouts WHERE ip = ?').get(ip) as
-      { until: number } | undefined;
-    if (!row) return 0;
-    const left = row.until - this.clock.now();
-    if (left <= 0) {
-      this.db.prepare('DELETE FROM lockouts WHERE ip = ?').run(ip);
-      return 0;
-    }
-    return left;
+  /** Addresses are keyed per IPv4 address or per IPv6 /64, so rotating inside a /64 does not help. */
+  static ipKey(ip: string): string {
+    if (!ip.includes(':')) return ip;
+    const [head = '', tail = ''] = ip.toLowerCase().split('::');
+    const a = head ? head.split(':') : [];
+    const b = tail ? tail.split(':') : [];
+    const groups = ip.includes('::')
+      ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b]
+      : a;
+    return (
+      groups
+        .slice(0, 4)
+        .map((g) => g.padStart(4, '0'))
+        .join(':') + '::/64'
+    );
   }
 
-  recordFailure(ip: string, reason: string): void {
+  /** Milliseconds left on a lockout for this address, or 0. A global brake applies after many failures anywhere. */
+  lockedFor(rawIp: string): number {
+    const ip = Auth.ipKey(rawIp);
     const now = this.clock.now();
-    this.db.prepare('INSERT INTO auth_failures (ip, at) VALUES (?, ?)').run(ip, now);
+    const rows = this.db.prepare('SELECT until FROM lockouts WHERE ip IN (?, ?)').all(ip, '*') as {
+      until: number;
+    }[];
+    const until = Math.max(0, ...rows.map((r) => r.until));
+    if (until <= now) {
+      this.db.prepare('DELETE FROM lockouts WHERE until <= ?').run(now);
+      return 0;
+    }
+    return until - now;
+  }
+
+  /**
+   * Counts an attempt before it is checked, so parallel requests cannot all pass a check that
+   * only fails later. Call `releaseAttempt` when the attempt succeeds. Returns the row id.
+   */
+  reserveAttempt(rawIp: string): number {
+    const ip = Auth.ipKey(rawIp);
+    const now = this.clock.now();
+    const id = Number(
+      this.db.prepare('INSERT INTO auth_failures (ip, at) VALUES (?, ?)').run(ip, now).lastInsertRowid,
+    );
     this.db.prepare('DELETE FROM auth_failures WHERE at < ?').run(now - LOCKOUT_MS);
-    this.log(`antlings-auth-fail ip=${ip} reason=${reason}`);
-    this.audit('auth_failure', ip, { reason });
-    const { n } = this.db
-      .prepare('SELECT COUNT(*) AS n FROM auth_failures WHERE ip = ? AND at >= ?')
-      .get(ip, now - LOCKOUT_MS) as { n: number };
-    if (n >= MAX_FAILURES) {
+    const lock = (key: string, why: string) => {
       this.db
         .prepare(
           'INSERT INTO lockouts (ip, until) VALUES (?, ?) ON CONFLICT(ip) DO UPDATE SET until = excluded.until',
         )
-        .run(ip, now + LOCKOUT_MS);
+        .run(key, now + LOCKOUT_MS);
+      this.log(`antlings-auth-lockout ip=${rawIp} scope=${why}`);
+      this.audit('lockout', rawIp, { scope: why });
+    };
+    const mine = (
+      this.db.prepare('SELECT COUNT(*) AS n FROM auth_failures WHERE ip = ?').get(ip) as { n: number }
+    ).n;
+    if (mine >= MAX_FAILURES) {
+      lock(ip, 'address');
       this.db.prepare('DELETE FROM auth_failures WHERE ip = ?').run(ip);
-      this.log(`antlings-auth-lockout ip=${ip}`);
-      this.audit('lockout', ip);
     }
+    const all = (this.db.prepare('SELECT COUNT(*) AS n FROM auth_failures').get() as { n: number }).n;
+    if (all >= GLOBAL_MAX_FAILURES) {
+      lock('*', 'global');
+      this.db.prepare('DELETE FROM auth_failures').run();
+    }
+    return id;
+  }
+
+  releaseAttempt(id: number): void {
+    this.db.prepare('DELETE FROM auth_failures WHERE id = ?').run(id);
+  }
+
+  /** Writes the failure to the log fail2ban reads and to the audit log. The attempt was counted by `reserveAttempt`. */
+  recordFailure(ip: string, reason: string): void {
+    this.log(`antlings-auth-fail ip=${ip} reason=${reason}`);
+    this.audit('auth_failure', ip, { reason });
   }
 
   // ---- credentials ----
@@ -173,6 +225,11 @@ export class Auth {
     this.db.prepare('DELETE FROM challenges WHERE expires_at < ?').run(now);
     this.db
       .prepare(
+        'DELETE FROM challenges WHERE rowid IN (SELECT rowid FROM challenges ORDER BY expires_at DESC LIMIT -1 OFFSET 200)',
+      )
+      .run();
+    this.db
+      .prepare(
         'INSERT INTO challenges (id, kind, challenge, session_id, extra, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(id, kind, challenge, sessionId ?? null, extra ?? null, now + CHALLENGE_MS);
@@ -225,6 +282,7 @@ export class Auth {
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM passkeys').run();
       this.db.prepare('DELETE FROM fallback').run();
+      this.db.prepare('DELETE FROM fallback_pending').run();
       this.db.prepare('DELETE FROM sessions').run();
       this.db.prepare('DELETE FROM ws_tickets').run();
       this.db.prepare('DELETE FROM pending_logins').run();
@@ -325,9 +383,13 @@ export class Auth {
       return null;
     }
     if (!this.checkTotp(code)) {
+      const tries = (this.pendingTries.get(pendingId) ?? 0) + 1;
+      this.pendingTries.set(pendingId, tries);
+      if (tries >= 3) this.db.prepare('DELETE FROM pending_logins WHERE id = ?').run(pendingId);
       this.recordFailure(ip, 'totp');
       return null;
     }
+    this.pendingTries.delete(pendingId);
     this.db.prepare('DELETE FROM pending_logins WHERE id = ?').run(pendingId);
     this.audit('signin', ip, { method: 'password+totp' });
     return this.createSession('password', ip, ua);
@@ -345,10 +407,10 @@ export class Auth {
   }
 
   /** Accepts a code from the previous, current or next 30 s step. A step can be used once. */
-  private checkTotp(code: string, includeUnconfirmed = false): boolean {
-    const row = this.db.prepare('SELECT totp_secret_enc, confirmed FROM fallback').get() as
-      { totp_secret_enc: string; confirmed: number } | undefined;
-    if (!row || (!row.confirmed && !includeUnconfirmed)) return false;
+  private checkTotp(code: string): boolean {
+    const row = this.db.prepare('SELECT totp_secret_enc FROM fallback WHERE confirmed = 1').get() as
+      { totp_secret_enc: string } | undefined;
+    if (!row) return false;
     const now = this.clock.now();
     const delta = this.totpFor(decrypt(this.config.secretKey, row.totp_secret_enc)).validate({
       token: code,
@@ -363,8 +425,12 @@ export class Auth {
   }
 
   /** Current code for the stored secret. Only tests call this. */
-  currentTotpForTest(offsetSteps = 0): string {
-    const row = this.db.prepare('SELECT totp_secret_enc FROM fallback').get() as { totp_secret_enc: string };
+  currentTotpForTest(offsetSteps = 0, pending = false): string {
+    const row = this.db
+      .prepare(`SELECT totp_secret_enc FROM ${pending ? 'fallback_pending' : 'fallback'}`)
+      .get() as {
+      totp_secret_enc: string;
+    };
     return this.totpFor(decrypt(this.config.secretKey, row.totp_secret_enc)).generate({
       timestamp: this.clock.now() + offsetSteps * 30_000,
     });
@@ -387,12 +453,15 @@ export class Auth {
 
   /** Returns the live session for a cookie value and refreshes its idle timer. */
   getSession(cookie: string | undefined): SessionRow | undefined {
-    if (!cookie) return undefined;
-    const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(sha256(cookie)) as
-      SessionRow | undefined;
+    return cookie ? this.sessionById(sha256(cookie)) : undefined;
+  }
+
+  /** Same check by the stored id (used by open WebSocket connections). Revoked or idle sessions return undefined. */
+  sessionById(id: string): SessionRow | undefined {
+    const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
     if (!row || row.revoked_at !== null) return undefined;
     const now = this.clock.now();
-    if (now - row.last_seen_at > this.idleMs()) {
+    if (now - row.last_seen_at > this.idleMs() || now - row.created_at > MAX_SESSION_MS) {
       this.revoke(row.short_id);
       return undefined;
     }
@@ -500,21 +569,42 @@ export class Auth {
     return 'ok';
   }
 
-  async setFallback(password: string): Promise<{ secret: string; otpauthUrl: string }> {
+  /** Stores a new password and secret as pending. The working fallback stays active until the new code is confirmed. */
+  async setFallback(password: string, ip?: string): Promise<{ secret: string; otpauthUrl: string }> {
     const secret = new OTP.Secret({ size: 20 });
     const hash = await argonHash(password);
     this.db
       .prepare(
-        `INSERT INTO fallback (id, password_hash, totp_secret_enc, confirmed, created_at) VALUES (1, ?, ?, 0, ?)
-         ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, totp_secret_enc = excluded.totp_secret_enc, confirmed = 0`,
+        `INSERT INTO fallback_pending (id, password_hash, totp_secret_enc, created_at) VALUES (1, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, totp_secret_enc = excluded.totp_secret_enc, created_at = excluded.created_at`,
       )
       .run(hash, encrypt(this.config.secretKey, secret.base32), this.clock.now());
+    this.audit('fallback_pending', ip);
     return { secret: secret.base32, otpauthUrl: this.totpFor(secret.base32).toString() };
   }
 
+  /** Activates the pending fallback if the code matches its secret. */
   confirmFallback(code: string, ip: string): boolean {
-    if (!this.checkTotp(code, true)) return false;
-    this.db.prepare('UPDATE fallback SET confirmed = 1').run();
+    const p = this.db.prepare('SELECT password_hash, totp_secret_enc FROM fallback_pending').get() as
+      { password_hash: string; totp_secret_enc: string } | undefined;
+    if (!p) return false;
+    const now = this.clock.now();
+    const delta = this.totpFor(decrypt(this.config.secretKey, p.totp_secret_enc)).validate({
+      token: code,
+      timestamp: now,
+      window: 1,
+    });
+    if (delta === null) return false;
+    this.setSetting('totp_last_step', String(Math.floor(now / 30_000) + delta));
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO fallback (id, password_hash, totp_secret_enc, confirmed, created_at) VALUES (1, ?, ?, 1, ?)
+           ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, totp_secret_enc = excluded.totp_secret_enc, confirmed = 1`,
+        )
+        .run(p.password_hash, p.totp_secret_enc, now);
+      this.db.prepare('DELETE FROM fallback_pending').run();
+    })();
     this.audit('fallback_enabled', ip);
     return true;
   }

@@ -53,6 +53,14 @@ describe('route protection', () => {
     expect(count).toBeGreaterThan(15);
   });
 
+  it('decides from the routed handler, not from the raw URL (percent-encoded paths)', async () => {
+    kit = await makeKit();
+    for (const url of ['/%61pi/me', '/%61pi/security', '/%77s', '/api/%73ecurity', '/api//security']) {
+      const r = await kit.call({ method: 'GET', url });
+      expect(r.statusCode, url).toBe(401);
+    }
+  });
+
   it('unknown /api paths and non-GET unknown paths also need a session', async () => {
     kit = await makeKit();
     expect((await kit.call({ method: 'GET', url: '/api/nope' })).statusCode).toBe(401);
@@ -184,6 +192,17 @@ describe('sign-in, cookie and csrf', () => {
     expect((await kit.call({ method: 'GET', url: '/api/me', ...a })).statusCode).toBe(200);
   });
 
+  it('ends a session after 30 days even if it is used all the time', async () => {
+    kit = await makeKit();
+    const s = await kit.signIn();
+    for (let i = 0; i < 71; i++) {
+      kit.clock.advance(10 * 3_600_000);
+      expect((await kit.call({ method: 'GET', url: '/api/me', ...s })).statusCode).toBe(200);
+    }
+    kit.clock.advance(11 * 3_600_000);
+    expect((await kit.call({ method: 'GET', url: '/api/me', ...s })).statusCode).toBe(401);
+  });
+
   it('expires a session after the idle timeout, and activity extends it', async () => {
     kit = await makeKit();
     const s = await kit.signIn();
@@ -240,6 +259,32 @@ describe('lockout', () => {
     expect((await passkeyLogin(kit)).statusCode).toBe(200);
   });
 
+  it('counts parallel attempts, so a burst cannot get past the limit', async () => {
+    kit = await makeKit();
+    const rs = await Promise.all(
+      Array.from({ length: 30 }, () =>
+        kit.call({ method: 'POST', url: '/api/auth/password', payload: { password: 'wrong wrong wrong' } }),
+      ),
+    );
+    expect(rs.filter((r) => r.statusCode === 401).length).toBeLessThanOrEqual(5);
+    expect(rs.filter((r) => r.statusCode === 429).length).toBeGreaterThanOrEqual(25);
+  });
+
+  it('treats a whole IPv6 /64 as one address', async () => {
+    kit = await makeKit();
+    const bad = (ip: string) =>
+      kit.call({ method: 'POST', url: '/api/auth/password', remoteAddress: ip, payload: { password: 'x' } });
+    for (let i = 1; i <= 5; i++) await bad(`2001:db8:1:2::${i}`);
+    expect((await bad('2001:db8:1:2:aaaa::9')).statusCode).toBe(429);
+    expect((await bad('2001:db8:1:3::1')).statusCode).toBe(401);
+  });
+
+  it('a successful sign-in does not count toward the limit', async () => {
+    kit = await makeKit();
+    await kit.signIn();
+    for (let i = 0; i < 10; i++) expect((await passkeyLogin(kit)).statusCode).toBe(200);
+  });
+
   it('writes a line fail2ban can match, with the address', async () => {
     kit = await makeKit();
     await kit.call({ method: 'POST', url: '/api/auth/password', payload: { password: 'x' } });
@@ -284,6 +329,8 @@ describe('step-up', () => {
       ['POST', '/api/security/passkeys/verify', { challengeId: 'xxxxxxxx', response: {} }],
       ['DELETE', '/api/security/passkeys/key-1'],
       ['POST', '/api/security/fallback', { password: 'correct horse battery' }],
+      ['POST', '/api/security/fallback/confirm', { code: '123456' }],
+      ['PATCH', '/api/security/settings', { idleTimeoutHours: 720 }],
     ];
     for (const [method, url, payload] of guarded) {
       const r = await kit.call({ method: method as 'POST', url, ...s, payload: payload ?? {} });
@@ -388,7 +435,7 @@ describe('password and one-time code', () => {
       method: 'POST',
       url: '/api/security/fallback/confirm',
       ...s,
-      payload: { code: kit.auth.currentTotpForTest() },
+      payload: { code: kit.auth.currentTotpForTest(0, true) },
     });
     expect(ok.statusCode).toBe(200);
     kit.clock.advance(60_000);
@@ -438,6 +485,53 @@ describe('password and one-time code', () => {
       payload: { pendingId: p.pendingId, code: '123456' },
     });
     expect(badCode.statusCode).toBe(401);
+  });
+
+  it('keeps the old fallback working until a new one is confirmed', async () => {
+    const s = await withFallback();
+    await kit.stepUp(s);
+    await kit.call({
+      method: 'POST',
+      url: '/api/security/fallback',
+      ...s,
+      payload: { password: 'another long passphrase' },
+    });
+    const old = await kit.call({
+      method: 'POST',
+      url: '/api/auth/password',
+      payload: { password: 'correct horse battery' },
+    });
+    expect(old.statusCode).toBe(200);
+    const fresh = await kit.call({
+      method: 'POST',
+      url: '/api/auth/password',
+      payload: { password: 'another long passphrase' },
+    });
+    expect(fresh.statusCode).toBe(401);
+  });
+
+  it('allows only three code guesses per password step', async () => {
+    await withFallback();
+    const p = (
+      await kit.call({
+        method: 'POST',
+        url: '/api/auth/password',
+        payload: { password: 'correct horse battery' },
+      })
+    ).json();
+    for (let i = 0; i < 3; i++)
+      await kit.call({
+        method: 'POST',
+        url: '/api/auth/totp',
+        payload: { pendingId: p.pendingId, code: '111111' },
+      });
+    kit.clock.advance(30_000);
+    const late = await kit.call({
+      method: 'POST',
+      url: '/api/auth/totp',
+      payload: { pendingId: p.pendingId, code: kit.auth.currentTotpForTest() },
+    });
+    expect(late.statusCode).toBe(401);
   });
 
   it('stores the TOTP secret encrypted and the password hashed', async () => {

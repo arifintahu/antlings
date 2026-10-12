@@ -4,6 +4,10 @@ import { buildApp, COOKIE_NAME, type AppOptions } from './app.js';
 import { Auth } from './auth/service.js';
 import type { StoredPasskey, WebAuthnService } from './auth/webauthn.js';
 import { loadConfig, type Config } from './config.js';
+import { FakeAgents, FakeTranscripts } from './fakeAgent.js';
+import { SessionManager } from './sessions.js';
+import { attachWebSocket } from './ws.js';
+import WebSocket from 'ws';
 import { openDb } from './db.js';
 import { randomToken, type Clock } from './util.js';
 
@@ -55,6 +59,14 @@ export interface Creds {
 
 export interface Kit {
   app: FastifyInstance;
+  mgr: SessionManager;
+  agents: FakeAgents;
+  transcripts: FakeTranscripts;
+  /** Starts listening on a free port and returns an opener for authenticated WebSocket clients. */
+  listen(): Promise<{
+    port: number;
+    open(c: Creds, opts?: { origin?: string | null; ticket?: string }): Promise<TestSocket>;
+  }>;
   auth: Auth;
   clock: FakeClock;
   logs: string[];
@@ -67,6 +79,17 @@ export interface Kit {
   call(opts: InjectOptions & { cookie?: string; csrf?: string }): Promise<LightMyRequestResponse>;
 }
 
+export interface TestSocket {
+  ws: WebSocket;
+  received: { t: string; [k: string]: unknown }[];
+  send(m: unknown): void;
+  waitFor(
+    pred: (m: { t: string; [k: string]: unknown }) => boolean,
+    ms?: number,
+  ): Promise<{ t: string; [k: string]: unknown }>;
+  closed: Promise<number>;
+}
+
 export async function makeKit(
   over: Partial<AppOptions> = {},
   env: Record<string, string> = {},
@@ -75,7 +98,23 @@ export async function makeKit(
   const logs: string[] = [];
   const config = testConfig(env);
   const auth = new Auth(openDb(':memory:'), clock, config, fakeWebAuthn, (l) => logs.push(l));
-  const app = await buildApp({ auth, ...over });
+  const agents = new FakeAgents();
+  const transcripts = new FakeTranscripts();
+  const mgr = new SessionManager({
+    db: auth.db,
+    clock,
+    config,
+    agents,
+    transcripts,
+    audit: (kind, detail) => auth.audit(kind, undefined, detail),
+  });
+  const app = await buildApp({
+    auth,
+    extend: (a) => {
+      attachWebSocket(a, auth, mgr, transcripts);
+    },
+    ...over,
+  });
   await app.ready();
 
   const call: Kit['call'] = ({ cookie, csrf, headers, method, ...rest }) =>
@@ -124,5 +163,52 @@ export async function makeKit(
     if (r.statusCode !== 200) throw new Error(`step-up failed: ${r.statusCode}`);
   };
 
-  return { app, auth, clock, logs, signIn, challengeOf, stepUp, call };
+  const listen: Kit['listen'] = async () => {
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const port = (app.server.address() as { port: number }).port;
+    return {
+      port,
+      async open(c, o = {}) {
+        let ticket = o.ticket;
+        if (ticket === undefined)
+          ticket = (await call({ method: 'POST', url: '/api/ws-ticket', ...c })).json().ticket;
+        const headers: Record<string, string> = {};
+        if (o.origin !== null) headers.origin = o.origin ?? ORIGIN;
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?ticket=${ticket}`, { headers });
+        const received: TestSocket['received'] = [];
+        const waiters: (() => void)[] = [];
+        ws.on('message', (d) => {
+          received.push(JSON.parse(d.toString()));
+          waiters.forEach((w) => w());
+        });
+        const closed = new Promise<number>((r) => ws.on('close', (code) => r(code)));
+        await new Promise<void>((res, rej) => {
+          ws.on('open', () => res());
+          ws.on('error', rej);
+          ws.on('unexpected-response', (_q, r) => rej(new Error(`status ${r.statusCode}`)));
+        });
+        return {
+          ws,
+          received,
+          closed,
+          send: (m) => ws.send(JSON.stringify(m)),
+          waitFor: (pred, ms = 3000) =>
+            new Promise((res, rej) => {
+              const check = () => {
+                const f = received.find(pred);
+                if (f) res(f);
+              };
+              waiters.push(check);
+              check();
+              setTimeout(
+                () => rej(new Error(`timeout; got ${JSON.stringify(received.slice(-5))}`)),
+                ms,
+              ).unref();
+            }),
+        };
+      },
+    };
+  };
+
+  return { app, mgr, agents, transcripts, listen, auth, clock, logs, signIn, challengeOf, stepUp, call };
 }

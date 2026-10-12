@@ -44,7 +44,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
         userID: USER_ID,
         attestationType: 'none',
         excludeCredentials: existingIds.map((id) => ({ id })),
-        authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+        authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
       });
       return { options, challenge: options.challenge };
     },
@@ -55,7 +55,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
           expectedChallenge: challenge,
           expectedOrigin: origin,
           expectedRPID: rpId,
-          requireUserVerification: false,
+          requireUserVerification: true,
         });
         if (!v.verified) return null;
         const c = v.registrationInfo.credential;
@@ -70,7 +70,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
       }
     },
     async authOptions() {
-      const options = await generateAuthenticationOptions({ rpID: rpId, userVerification: 'preferred' });
+      const options = await generateAuthenticationOptions({ rpID: rpId, userVerification: 'required' });
       return { options, challenge: options.challenge };
     },
     async verifyAuth(response, challenge, lookup) {
@@ -90,7 +90,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
           expectedOrigin: origin,
           expectedRPID: rpId,
           credential,
-          requireUserVerification: false,
+          requireUserVerification: true,
         });
         return v.verified ? { id: stored.id, newCounter: v.authenticationInfo.newCounter } : null;
       } catch {
