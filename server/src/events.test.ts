@@ -56,3 +56,29 @@ describe('historyEvents', () => {
     ]);
   });
 });
+
+describe('repairStoredHistory', () => {
+  it('rewrites old tagged events and leaves clean ones', async () => {
+    const { openDb } = await import('./db.js');
+    const { repairStoredHistory } = await import('./sessions.js');
+    const db = openDb(':memory:');
+    const put = (seq: number, ev: unknown) =>
+      db
+        .prepare('INSERT INTO event_log (session_id, seq, at, data) VALUES (?, ?, 0, ?)')
+        .run('s', seq, JSON.stringify(ev));
+    put(1, {
+      k: 'user',
+      text: '<command-name>/exit</command-name><command-message>exit</command-message><command-args></command-args>',
+    });
+    put(2, { k: 'user', text: '<local-command-stdout>See ya!</local-command-stdout>' });
+    put(3, { k: 'user', text: 'plain' });
+    expect(repairStoredHistory(db)).toBe(2);
+    const rows = db.prepare('SELECT data FROM event_log ORDER BY seq').all() as { data: string }[];
+    expect(rows.map((r) => JSON.parse(r.data))).toEqual([
+      { k: 'user', text: '/exit' },
+      { k: 'notice', message: 'See ya!' },
+      { k: 'user', text: 'plain' },
+    ]);
+    expect(repairStoredHistory(db)).toBe(0);
+  });
+});

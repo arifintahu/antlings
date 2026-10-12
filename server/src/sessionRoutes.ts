@@ -104,7 +104,14 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
 
   app.get<{ Querystring: { archived?: string } }>('/api/sessions', async (req) => {
     const wantArchived = req.query.archived === '1';
-    const all = await transcripts.list();
+    const listed = await transcripts.list();
+    const known = new Set(listed.map((i) => i.sessionId));
+    // A session with no message yet has no transcript. Show it from Antlings' own records.
+    const fresh: TranscriptInfo[] = mgr
+      .allMeta()
+      .filter((m) => !known.has(m.id))
+      .map((m) => ({ sessionId: m.id, summary: 'New session', lastModified: m.createdAt, cwd: m.cwd }));
+    const all = [...listed, ...fresh];
     return {
       sessions: all
         .filter((i) => i.cwd && folders.relative(i.cwd) !== null)
