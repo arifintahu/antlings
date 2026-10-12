@@ -1,0 +1,33 @@
+{
+  "name": "@antlings/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "svelte-check --tsconfig ./tsconfig.json && vite build",
+    "icons": "tsx scripts/make-icons.ts",
+    "test": "svelte-check --tsconfig ./tsconfig.json && vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@antlings/shared": "workspace:*",
+    "@fontsource/vt323": "5.3.0",
+    "@simplewebauthn/browser": "14.0.0",
+    "qrcode-generator": "2.0.4",
+    "svelte": "5.57.2"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.64.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "26.6.5",
+    "@types/qrcode-generator": "1.0.6",
+    "otpauth": "9.5.2",
+    "svelte-check": "4.7.6",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

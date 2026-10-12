@@ -321,7 +321,15 @@ export class SessionManager {
       new Promise((resolve) => {
         const requestId = randomToken(9);
         a.pending.set(requestId, { resolve, toolName, input });
-        this.emit(a.id, { k: 'approval_request', requestId, toolName, input });
+        this.emit(a.id, {
+          k: 'approval_request',
+          requestId,
+          toolName,
+          toolUseId: opts.toolUseID,
+          title: opts.title,
+          input,
+          parentToolUseId: a.mapper.parentOf(opts.toolUseID),
+        });
         this.emit(a.id, { k: 'state', state: 'approval', tool: toolName });
         this.d.notifier?.approvalWaiting(a.id, toolName);
         opts.signal.addEventListener(

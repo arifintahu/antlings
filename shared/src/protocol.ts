@@ -50,7 +50,15 @@ export type UiEvent =
   | { k: 'assistant_text'; text: string; parentToolUseId?: string }
   | { k: 'tool_use'; toolUseId: string; name: string; input: unknown; parentToolUseId?: string }
   | { k: 'tool_result'; toolUseId: string; ok: boolean; text: string; parentToolUseId?: string }
-  | { k: 'approval_request'; requestId: string; toolName: string; input: unknown; parentToolUseId?: string }
+  | {
+      k: 'approval_request';
+      requestId: string;
+      toolName: string;
+      toolUseId?: string;
+      title?: string;
+      input: unknown;
+      parentToolUseId?: string;
+    }
   | { k: 'approval_resolved'; requestId: string; decision: 'allow' | 'deny' }
   | { k: 'task_started'; taskId: string; toolUseId?: string; description: string; subagentType: string }
   | { k: 'task_progress'; taskId: string; lastTool?: string; usage?: TaskUsage; summary?: string }

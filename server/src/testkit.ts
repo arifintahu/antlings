@@ -7,6 +7,8 @@ import { loadConfig, type Config } from './config.js';
 import { FakeAgents, FakeTranscripts } from './fakeAgent.js';
 import { SessionManager } from './sessions.js';
 import { Folders } from './folders.js';
+import webpush from 'web-push';
+import { PushService } from './push.js';
 import { wireApp } from './wiring.js';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -64,6 +66,10 @@ export interface Creds {
 export interface Kit {
   app: FastifyInstance;
   mgr: SessionManager;
+  push: PushService;
+  /** Payloads handed to the web-push library, with the endpoint they went to. */
+  pushSent: { endpoint: string; payload: Record<string, unknown> }[];
+  pushFail: { status?: number };
   /** A real temporary home folder; Antlings may only touch folders inside it. */
   home: string;
   folders: Folders;
@@ -110,6 +116,17 @@ export async function makeKit(
   const auth = new Auth(openDb(':memory:'), clock, config, fakeWebAuthn, (l) => logs.push(l));
   const agents = new FakeAgents();
   const transcripts = new FakeTranscripts();
+  const pushSent: Kit['pushSent'] = [];
+  const pushFail: Kit['pushFail'] = {};
+  const push = new PushService(
+    auth.db,
+    clock,
+    { ...webpush.generateVAPIDKeys(), subject: 'mailto:test@localhost' },
+    (async (sub: { endpoint: string }, body: string) => {
+      if (pushFail.status) throw Object.assign(new Error('gone'), { statusCode: pushFail.status });
+      pushSent.push({ endpoint: sub.endpoint, payload: JSON.parse(body) });
+    }) as never,
+  );
   const mgr = new SessionManager({
     db: auth.db,
     clock,
@@ -117,11 +134,12 @@ export async function makeKit(
     agents,
     transcripts,
     audit: (kind, detail) => auth.audit(kind, undefined, detail),
+    notifier: push,
   });
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts });
+      wireApp(a, { auth, mgr, folders, transcripts, push });
       a.addHook('onClose', async () => rmSync(homeDir, { recursive: true, force: true }));
     },
     ...over,
@@ -157,6 +175,8 @@ export async function makeKit(
     });
     if (v.statusCode !== 200) throw new Error(`setup failed: ${v.statusCode} ${v.body}`);
     const cookie = v.cookies.find((c) => c.name === COOKIE_NAME)!.value;
+    // Tests start from an ordinary session; the first-run session is fresh for 5 minutes.
+    clock.advance(5 * 60_000 + 1);
     return { cookie, csrf: v.json().csrf };
   };
 
@@ -224,6 +244,9 @@ export async function makeKit(
   return {
     app,
     mgr,
+    push,
+    pushSent,
+    pushFail,
     home: folders.home,
     folders,
     agents,

@@ -39,6 +39,8 @@ export interface NewSession {
 export class Auth {
   private dummyHash: Promise<string> | undefined;
   private pendingTries = new Map<string, number>();
+  /** Called after a successful sign-in (not first-run setup). Used for the push alert. */
+  onSignin: (() => void) | undefined;
 
   constructor(
     readonly db: Db,
@@ -320,7 +322,8 @@ export class Auth {
       if (used.changes !== 1 || this.passkeyCount() > 0) return null;
       this.savePasskey(reg, name);
       this.audit('setup_complete', ip, { passkey: name });
-      return this.createSession('passkey', ip, ua);
+      // The code and the new passkey were just proven, so the first session counts as fresh.
+      return this.createSession('passkey', ip, ua, true);
     })();
   }
 
@@ -345,7 +348,12 @@ export class Auth {
     }
     this.touchPasskey(ok.id, ok.newCounter);
     this.audit('signin', ip, { method: 'passkey' });
+    this.notifySignin();
     return this.createSession('passkey', ip, ua);
+  }
+
+  private notifySignin(): void {
+    if (this.getSetting('signin_alerts') !== '0') this.onSignin?.();
   }
 
   private touchPasskey(id: string, counter: number): void {
@@ -392,6 +400,7 @@ export class Auth {
     this.pendingTries.delete(pendingId);
     this.db.prepare('DELETE FROM pending_logins WHERE id = ?').run(pendingId);
     this.audit('signin', ip, { method: 'password+totp' });
+    this.notifySignin();
     return this.createSession('password', ip, ua);
   }
 
@@ -438,16 +447,16 @@ export class Auth {
 
   // ---- sessions ----
 
-  createSession(method: string, ip: string, ua: string): NewSession {
+  createSession(method: string, ip: string, ua: string, fresh = false): NewSession {
     const cookie = randomToken(32);
     const csrf = randomToken(24);
     const shortId = randomToken(8);
     const now = this.clock.now();
     this.db
       .prepare(
-        'INSERT INTO sessions (id, short_id, csrf, created_at, last_seen_at, user_agent, ip, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sessions (id, short_id, csrf, created_at, last_seen_at, fresh_until, user_agent, ip, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(sha256(cookie), shortId, csrf, now, now, ua.slice(0, 200), ip, method);
+      .run(sha256(cookie), shortId, csrf, now, now, fresh ? now + FRESH_MS : 0, ua.slice(0, 200), ip, method);
     return { cookie, csrf, shortId };
   }
 

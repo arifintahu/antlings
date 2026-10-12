@@ -35,6 +35,12 @@ export class EventMapper {
   plan: PlanUsage = { status: 'unavailable' };
   /** `system:init` arrives every turn; it only reports the settings, it is not a new session. */
   private agentToolIds = new Set<string>();
+  private parents = new Map<string, string | undefined>();
+
+  /** The subagent call (Agent tool_use id) a tool call ran under, if any. */
+  parentOf(toolUseId: string | undefined): string | undefined {
+    return toolUseId ? this.parents.get(toolUseId) : undefined;
+  }
 
   map(m: SDKMessage): UiEvent[] {
     switch (m.type) {
@@ -125,6 +131,7 @@ export class EventMapper {
         out.push({ k: 'assistant_text', text: b.text, parentToolUseId: parent });
       else if (b.type === 'tool_use' && b.id && b.name) {
         if (b.name === 'Agent' || b.name === 'Task') this.agentToolIds.add(b.id);
+        this.parents.set(b.id, parent);
         out.push({ k: 'tool_use', toolUseId: b.id, name: b.name, input: b.input, parentToolUseId: parent });
         if (!parent) out.push({ k: 'state', state: 'tool', tool: b.name });
       }

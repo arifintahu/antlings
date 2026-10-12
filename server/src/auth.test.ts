@@ -81,6 +81,28 @@ describe('first run', () => {
     expect((await kit.call({ method: 'GET', url: '/api/auth/status' })).json().firstRun).toBe(false);
   });
 
+  it('the session created by first-run setup counts as fresh for five minutes', async () => {
+    kit = await makeKit();
+    const { code } = kit.auth.createSetupCode();
+    const o = (await kit.call({ method: 'POST', url: '/api/setup/options', payload: { code } })).json();
+    const v = await kit.call({
+      method: 'POST',
+      url: '/api/setup/verify',
+      payload: {
+        code,
+        challengeId: o.challengeId,
+        response: { id: 'k', challenge: kit.challengeOf(o.challengeId) },
+      },
+    });
+    const creds = {
+      cookie: v.cookies.find((c) => c.name === COOKIE_NAME)!.value,
+      csrf: v.json().csrf as string,
+    };
+    expect((await kit.call({ method: 'GET', url: '/api/me', ...creds })).json().fresh).toBe(true);
+    kit.clock.advance(5 * 60_000 + 1);
+    expect((await kit.call({ method: 'GET', url: '/api/me', ...creds })).json().fresh).toBe(false);
+  });
+
   it('rejects an expired code', async () => {
     kit = await makeKit();
     const { code } = kit.auth.createSetupCode();

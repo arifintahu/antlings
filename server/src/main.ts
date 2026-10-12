@@ -6,6 +6,7 @@ import { dbPath, loadConfig } from './config.js';
 import { openDb } from './db.js';
 import { loadEnvFileIfNeeded } from './env.js';
 import { Folders } from './folders.js';
+import { PushService } from './push.js';
 import { SessionManager } from './sessions.js';
 import { sdkTranscripts } from './transcripts.js';
 import { systemClock } from './util.js';
@@ -17,6 +18,8 @@ async function main(): Promise<void> {
   const db = openDb(dbPath(config));
   const auth = new Auth(db, systemClock, config, realWebAuthn(config.rpId, config.origin));
   const folders = new Folders(config.home);
+  const push = new PushService(db, systemClock, config.vapid);
+  auth.onSignin = () => push.signedIn();
   const mgr = new SessionManager({
     db,
     clock: systemClock,
@@ -24,10 +27,13 @@ async function main(): Promise<void> {
     agents: sdkAgentFactory(config),
     transcripts: sdkTranscripts,
     audit: (kind, detail) => auth.audit(kind, undefined, detail),
+    notifier: push,
   });
   const app = await buildApp({
     auth,
-    extend: (a) => wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts }),
+    extend: (a) => {
+      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, push });
+    },
   });
   const reaper = setInterval(() => mgr.reapIdle(), 60_000);
   reaper.unref();
