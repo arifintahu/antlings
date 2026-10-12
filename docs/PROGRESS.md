@@ -15,15 +15,14 @@ Branch `build/v0.1`, nothing pushed, nothing merged to `main`.
 - M3 session management: list, archive, rename, delete (step-up), folder picker (Windows and Linux/Node 24), new-session validation, history import, subagent transcripts.
 - M4 web app: Svelte app with every mockup screen, sprite module with hash tests against the mockup's own code, PWA, push, 20 Playwright tests with a virtual passkey and axe (light and dark), phone screenshots in `docs/screens/`. Code Reviewer findings fixed (replay paging, socket race, lost sends, push, a11y).
 - M5 hardening: `pnpm audit` clean, versions pinned, header/CORS/size/log tests, ADR 0002 threat model section.
-- M6 deploy files: unit, Caddy snippet, fail2ban, installer, uninstaller, release build in Docker, smoke test, container install test, runbook. SecOps review of `deploy/` requested.
+- M6 deploy files: unit, Caddy snippet, fail2ban, installer, uninstaller, release build in Docker, smoke test, container install test, runbook. SecOps and Code Reviewer findings on `deploy/` and the server changes applied (link check that failed open, release links, rollback, concurrent starts, ws idle and ping, push allowlist).
 
 ## Test output (last run)
-- shared 3, server 168 (1 live test skipped), web 81, e2e 20. `pnpm lint`, `pnpm test`, `pnpm build` clean. shellcheck clean on all scripts.
+- shared 3, server 174 (1 live test skipped), web 81, e2e 20. `pnpm lint`, `pnpm test`, `pnpm build` clean. shellcheck clean on all scripts.
 - Release smoke test in a Node 24 container as an unprivileged user: all checks pass, idle memory 85 MB.
 - Container install test (real install, second install, backup of an edited unit, low-memory refusal, uninstall, purge): all pass.
 
 ## Next
-- Apply SecOps and Code Reviewer findings on `deploy/`.
 - M7 skipped (DEPLOY=no). M8 handoff.
 
 ## Open problems

@@ -466,7 +466,7 @@ export class Auth {
   }
 
   /** Same check by the stored id (used by open WebSocket connections). Revoked or idle sessions return undefined. */
-  sessionById(id: string): SessionRow | undefined {
+  sessionById(id: string, touch = true): SessionRow | undefined {
     const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
     if (!row || row.revoked_at !== null) return undefined;
     const now = this.clock.now();
@@ -474,7 +474,7 @@ export class Auth {
       this.revoke(row.short_id);
       return undefined;
     }
-    this.db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(now, row.id);
+    if (touch) this.db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(now, row.id);
     return { ...row, last_seen_at: now };
   }
 

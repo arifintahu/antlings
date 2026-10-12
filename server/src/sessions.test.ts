@@ -231,6 +231,25 @@ describe('limits', () => {
   });
 });
 
+describe('concurrent starts', () => {
+  it('three parallel creates start two sessions and refuse the third', async () => {
+    kit = await makeKit();
+    const r = await Promise.allSettled([kit.mgr.create(NEW), kit.mgr.create(NEW), kit.mgr.create(NEW)]);
+    expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(2);
+    expect(r.filter((x) => x.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('two messages sent at once to a closed session both go through after one resume', async () => {
+    kit = await makeKit();
+    const { id } = await kit.mgr.create(NEW);
+    kit.mgr.close(id);
+    await until(() => !kit.mgr.isRunning(id));
+    await Promise.all([kit.mgr.send(id, 'hello'), kit.mgr.send(id, 'hello')]);
+    expect(kit.agents.handles).toHaveLength(2); // the original and one resumed process
+    expect(kit.mgr.eventsAfter(id, 0).filter((e) => e.event.k === 'user')).toHaveLength(2);
+  });
+});
+
 describe('resume', () => {
   it('resumes a closed session with resume=true and closes requests nobody can answer', async () => {
     kit = await makeKit();

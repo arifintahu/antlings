@@ -45,14 +45,21 @@ export function attachWebSocket(
     const send = (m: ServerMessage): void => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
     };
-    const alive = (): SessionRow | undefined => {
-      const row = auth.sessionById(sess.id);
+    // `touch` is false for the timer: an open but abandoned tab must not keep the idle timeout from firing.
+    const alive = (touch = true): SessionRow | undefined => {
+      const row = auth.sessionById(sess.id, touch);
       if (!row) ws.close(4401, 'signed out');
       return row;
     };
     // The ping lets the page notice a dead connection (a phone that slept) and reconnect.
+    let heard = true;
+    ws.on('pong', () => (heard = true));
     const timer = setInterval(() => {
-      if (alive()) send({ t: 'ping' });
+      if (!alive(false)) return;
+      if (!heard) return ws.terminate(); // no pong for a whole interval: the peer is gone
+      heard = false;
+      ws.ping();
+      send({ t: 'ping' });
     }, RECHECK_MS);
     timer.unref();
 

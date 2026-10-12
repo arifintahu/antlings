@@ -47,6 +47,15 @@ describe('push routes', () => {
     expect(kit.push.count()).toBe(0);
   });
 
+  it('keeps at most 20 subscriptions by dropping the oldest', async () => {
+    await setup();
+    for (let i = 0; i < 22; i++) {
+      kit.clock.advance(1000);
+      kit.push.save({ ...SUB, endpoint: `https://fcm.googleapis.com/fcm/send/${i}` });
+    }
+    expect(kit.push.count()).toBe(20);
+  });
+
   it('rejects malformed or non-https subscriptions', async () => {
     await setup();
     for (const payload of [

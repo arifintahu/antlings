@@ -59,6 +59,10 @@ mkdir -p /tmp/evil && ln -s /etc/passwd /tmp/evil/link && tar -czf /tmp/evil.tar
 if bash /dep/install.sh --release /tmp/evil.tar.gz > /tmp/evil.log 2>&1; then bad "link release accepted"; else grep -q "links" /tmp/evil.log && ok "tarball with a symlink refused" || { cat /tmp/evil.log; bad "wrong error"; }; fi
 [ ! -e /opt/antlings/current ] && ok "nothing was switched by the refused release" || bad "current exists"
 
+mkdir -p /tmp/evil2/a && ln -s ../../../etc/shadow /tmp/evil2/a/up && tar -czf /tmp/evil2.tar.gz -C /tmp/evil2 .
+if bash /dep/install.sh --release /tmp/evil2.tar.gz > /tmp/evil2.log 2>&1; then bad "escaping relative link accepted"; else ok "relative link that leaves the release refused"; fi
+tar -tzvf /rel/$ORIG | grep -cE "^l" | grep -qv "^0$" && ok "the real release has links (pnpm layout) and passes the link check" || bad "expected links in the real release"
+
 echo "--- first install"
 bash /dep/install.sh --release /rel/$ORIG > /tmp/install1.log 2>&1 || { cat /tmp/install1.log; bad "install failed"; }
 expect_eq "env file mode and owner" "640 root antlings" "$(stat -c "%a %U %G" /etc/antlings/antlings.env)"

@@ -78,7 +78,7 @@ install_file() { # src dest mode owner:group
   else
     # uninstall.sh removes files listed here instead of restoring a backup
     run mkdir -p "$STATE_DIR"
-    if [ "$DRY" -eq 0 ]; then echo "$dest" >> "$STATE_DIR/created.list"; fi
+    if [ "$DRY" -eq 0 ] && ! grep -qxs "$dest" "$STATE_DIR/created.list"; then echo "$dest" >> "$STATE_DIR/created.list"; fi
   fi
   run install -D -m "$mode" -o "${owner%%:*}" -g "${owner##*:}" "$src" "$dest"
 }
@@ -159,8 +159,29 @@ if [ -n "$RELEASE" ]; then
       else
         note "no $(basename "$RELEASE").sha256 next to the tarball: its origin is not checked"
       fi
-      if tar -tzvf "$RELEASE" | grep -qE '^[lh]'; then die "the release contains links; refusing to extract it"; fi
-      if tar -tzf "$RELEASE" | grep -qE '(^/|(^|/)\.\.(/|$))'; then die "the release contains absolute or .. paths; refusing to extract it"; fi
+      # The listing goes into a variable first: with a pipe, `grep -q` would end early and make tar fail with
+      # SIGPIPE, which `set -o pipefail` turns into a skipped check.
+      listing=$(tar -tzvf "$RELEASE") || die "cannot read the release tarball"
+      names=$(tar -tzf "$RELEASE") || die "cannot read the release tarball"
+      if printf '%s\n' "$names" | grep -qE '(^/|(^|/)\.\.(/|$))'; then die "the release contains absolute or .. paths; refusing to extract it"; fi
+      # Links are allowed only when they point to a relative path that stays inside the release (pnpm's layout).
+      if command -v node >/dev/null 2>&1; then
+        printf '%s\n' "$listing" | node -e '
+          const lines = require("fs").readFileSync(0, "utf8").split("\n").filter(Boolean);
+          const path = require("path").posix;
+          const bad = [];
+          for (const l of lines) {
+            const m = /^([lh])\S*\s+\S+\s+\d+\s+\S+\s+\S+\s+(.*?)(?: -> | link to )(.*)$/.exec(l);
+            if (!m) continue;
+            const [, kind, name, target] = m;
+            const resolved = kind === "h" ? path.normalize(target) : path.join(path.dirname(name), target);
+            if (path.isAbsolute(target) || resolved.startsWith("..") || path.isAbsolute(resolved)) bad.push(l);
+          }
+          if (bad.length) { console.error(bad.slice(0, 3).join("\n")); process.exit(1); }
+        ' || die "the release contains links that point outside the release; refusing to extract it"
+      else
+        if printf '%s\n' "$listing" | grep -qE '^[lh]'; then die "the release contains links and node is not here to check them"; fi
+      fi
     fi
     # Extract into a temporary folder, fix modes, then move into place, so a failed extraction never looks installed.
     run rm -rf "$target.tmp"
@@ -168,7 +189,7 @@ if [ -n "$RELEASE" ]; then
     run tar -xzf "$RELEASE" --no-same-owner --no-same-permissions -C "$target.tmp"
     run chown -R root:root "$target.tmp"
     # Nothing in the code tree may be writable by the antlings user (the agent) or carry setuid bits.
-    run chmod -R go-w,u-s,g-s,a-t "$target.tmp"
+    run chmod -R go+rX,go-w,u-s,g-s,a-t "$target.tmp"
     run mv -T "$target.tmp" "$target"
   fi
   if [ -L "$INSTALL_DIR/current" ]; then
@@ -193,6 +214,14 @@ if [ -f "$ENV_FILE" ]; then
   fi
 else
   claude_path=$(command -v claude 2>/dev/null || true)
+  case "$claude_path" in
+    ""|/home/*|/root/*)
+      note "WARNING: no system-wide claude binary found (${claude_path:-not on PATH}). Sessions cannot start until you install"
+      note "         Claude Code where the $APP_USER user can run it (for example /usr/local/bin/claude) and set"
+      note "         ANTLINGS_CLAUDE_PATH in $ENV_FILE."
+      claude_path=""
+      ;;
+  esac
   if [ "$DRY" -eq 1 ]; then
     note "[dry-run] would write $ENV_FILE (mode 640, root:$APP_USER) with ANTLINGS_ORIGIN=$origin and generated secrets"
   else
@@ -207,7 +236,7 @@ else
         echo "ANTLINGS_DATA_DIR=$DATA_DIR"
         echo "ANTLINGS_HOME=/home/$APP_USER"
         echo "ANTLINGS_STATIC_DIR=$INSTALL_DIR/current/web"
-        if [ -n "$claude_path" ]; then echo "ANTLINGS_CLAUDE_PATH=$claude_path"; fi
+        if [ -n "$claude_path" ]; then echo "ANTLINGS_CLAUDE_PATH=$claude_path"; else echo "# ANTLINGS_CLAUDE_PATH=/usr/local/bin/claude   (required: the release has no bundled binary)"; fi
         echo "ANTLINGS_AUTH_MODE=apikey"
         echo "ANTLINGS_MAX_SESSIONS=2"
         echo "ANTLINGS_MAX_SUBAGENTS=3"
@@ -274,7 +303,7 @@ else
     if ! command -v dig >/dev/null 2>&1; then
       dns_ok=0; note "dig is not installed, so DNS cannot be checked"
     else
-      resolved=$(dig +short A -- "$DOMAIN" 2>/dev/null | grep -E '^[0-9.]+$' || true)
+      resolved=$(dig +short A "$DOMAIN" 2>/dev/null | grep -E '^[0-9.]+$' || true)
       if [ -z "$resolved" ]; then dns_ok=0; note "DNS: $DOMAIN does not resolve yet"
       else
         dns_ok=0
@@ -293,19 +322,24 @@ else
     # The optional rate limit block stays commented. It needs the caddy-ratelimit module and an `order` line
     # in the global options, so it is enabled by hand (see the runbook).
     caddy_had_old=0
+    caddy_changed=0
     if [ -e "$CADDY_FILE" ]; then caddy_had_old=1; fi
+    if [ ! -f "$CADDY_FILE" ] || ! cmp -s "$snippet" "$CADDY_FILE"; then caddy_changed=1; fi
     install_file "$snippet" "$CADDY_FILE" 644 root:root
     rm -f "$snippet"
     if grep -Eqs '^[[:space:]]*import[[:space:]]+(/etc/caddy/antlings\.caddy|/etc/caddy/\*\.caddy)' "$CADDY_MAIN"; then
       if [ "$DRY" -eq 1 ]; then note "[dry-run] caddy validate --config $CADDY_MAIN, then systemctl reload caddy"; else
         if ! caddy validate --config "$CADDY_MAIN"; then
           # The main Caddyfile already imports this file. Leaving a broken one would break every site on the next reload.
-          if [ "$caddy_had_old" -eq 1 ] && [ -f "$BACKUP_DIR/$(echo "$CADDY_FILE" | tr / _)" ]; then
-            cp -a "$BACKUP_DIR/$(echo "$CADDY_FILE" | tr / _)" "$CADDY_FILE"
-          else
-            rm -f "$CADDY_FILE"
+          if [ "$caddy_changed" -eq 1 ]; then
+            if [ "$caddy_had_old" -eq 1 ] && [ -f "$BACKUP_DIR/$(echo "$CADDY_FILE" | tr / _)" ]; then
+              cp -a "$BACKUP_DIR/$(echo "$CADDY_FILE" | tr / _)" "$CADDY_FILE"
+            else
+              rm -f "$CADDY_FILE"
+            fi
+            die "Caddy rejected the config. $CADDY_FILE was put back as it was; Caddy was not reloaded."
           fi
-          die "Caddy rejected the config. $CADDY_FILE was put back as it was; Caddy was not reloaded."
+          die "Caddy rejects the config, but this run did not change $CADDY_FILE. Fix the Caddyfile and run this script again."
         fi
         caddy_reload=1
       fi
@@ -322,12 +356,14 @@ if [ "$caddy_reload" -eq 1 ]; then run systemctl reload caddy; fi
 step "Start"
 if [ -n "$RELEASE" ]; then
   note "restarting the service ends running Claude Code sessions. They resume on the next message."
-  run systemctl restart antlings
+  run systemctl restart antlings || note "WARNING: systemctl restart failed; checking health anyway"
 else
   run systemctl start antlings
 fi
 if [ "$DRY" -eq 0 ]; then
   ok=0
+  env_port=$(sed -n 's/^ANTLINGS_PORT=//p' "$ENV_FILE" 2>/dev/null | tail -n 1)
+  if printf '%s' "$env_port" | grep -qE '^[0-9]+$'; then PORT=$env_port; fi
   for _ in $(seq 1 30); do
     if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then ok=1; break; fi
     sleep 1

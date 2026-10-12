@@ -8,7 +8,7 @@ import type { Clock } from './util.js';
 
 /** Hosts of the browser push services. Anything else is refused, so the server cannot be pointed at internal hosts. */
 const PUSH_HOSTS = [
-  /(^|\.)googleapis\.com$/,
+  /^fcm\.googleapis\.com$/,
   /(^|\.)push\.services\.mozilla\.com$/,
   /(^|\.)push\.apple\.com$/,
   /(^|\.)notify\.windows\.com$/,
@@ -58,8 +58,14 @@ export class PushService implements Notifier {
     if (
       this.count() >= MAX_SUBSCRIPTIONS &&
       !this.db.prepare('SELECT 1 FROM push_subscriptions WHERE endpoint = ?').get(sub.endpoint)
-    )
-      return false;
+    ) {
+      // Drop the oldest, so stale endpoints that never answer 404 or 410 cannot fill the table for good.
+      this.db
+        .prepare(
+          'DELETE FROM push_subscriptions WHERE endpoint = (SELECT endpoint FROM push_subscriptions ORDER BY created_at LIMIT 1)',
+        )
+        .run();
+    }
     this.db
       .prepare(
         'INSERT INTO push_subscriptions (endpoint, data, created_at) VALUES (?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET data = excluded.data',

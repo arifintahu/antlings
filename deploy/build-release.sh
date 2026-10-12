@@ -33,9 +33,14 @@ MSYS_NO_PATHCONV=1 docker run --rm \
     cp -a /pack/app/. /pack/rel/app/
     # The VPS has its own claude binary (ANTLINGS_CLAUDE_PATH). The ~250 MB copies bundled with the SDK are not needed.
     rm -rf /pack/rel/app/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-linux-* /pack/rel/app/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-darwin-* /pack/rel/app/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-win32-*
+    rm -rf /pack/rel/app/src /pack/rel/app/dist
     cp -a server/dist /pack/rel/app/dist
     cp -a web/dist/. /pack/rel/web/
     cp -a deploy/. /pack/rel/deploy/
+    # pnpm leaves a few links that point back into the build folder. They are dangling on the VPS and the installer refuses them.
+    find /pack/rel -type l -print0 | while IFS= read -r -d "" l; do
+      case "$(readlink -m "$l")" in /pack/rel/*) ;; *) rm -f "$l" ;; esac
+    done
     # Refuse to ship anything that looks like a secret or local data.
     if find /pack/rel \( -name ".env" -o -name ".env.*" -o -name "*.db" -o -name "*.pem" -o -name ".credentials*" \) -not -name ".env.example" | grep -q .; then
       echo "the release contains a secret-looking file" >&2; exit 1

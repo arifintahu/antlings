@@ -79,12 +79,14 @@ export const FALLBACK_MODELS: ModelInfo[] = [
 ];
 const MODEL_CACHE_MS = 3_600_000;
 export const IDLE_CLOSE_MS = 15 * 60_000;
+const MAX_REPLAY = 20_000;
 
 export class SessionManager {
   private active = new Map<string, Active>();
   private listeners = new Map<string, Set<Listener>>();
   private seqCache = new Map<string, number>();
   private starting = new Set<string>();
+  private startWaiters = new Map<string, Promise<void>>();
   private removed = new Set<string>();
   private models: { at: number; list: ModelInfo[] } | undefined;
   plan: PlanUsage = { status: 'unavailable' };
@@ -130,9 +132,14 @@ export class SessionManager {
    * The replay and the listener registration happen in one tick, so nothing is missed or doubled.
    */
   subscribe(id: string, lastSeq: number, send: Listener): () => void {
-    // Page through the whole backlog so a client far behind still gets every event.
+    // Page through the backlog so a client far behind still gets its events. A huge backlog is capped to the
+    // newest MAX_REPLAY events so one reconnect cannot spike memory or block the event loop.
+    const head = this.d.db.prepare('SELECT MAX(seq) AS m FROM event_log WHERE session_id = ?').get(id) as {
+      m: number | null;
+    };
+    const start = Math.max(lastSeq, (head.m ?? 0) - MAX_REPLAY);
     const replay: StoredEvent[] = [];
-    for (let from = lastSeq; ;) {
+    for (let from = start; ;) {
       const page = this.eventsAfter(id, from, 2000);
       replay.push(...page);
       if (page.length < 2000) break;
@@ -207,9 +214,22 @@ export class SessionManager {
     mode: PermissionMode;
   }): Promise<SessionMeta> {
     this.checkLimit();
-    await this.d.agents.load?.();
+    const id = randomUUID();
+    this.starting.add(id); // counts toward the limit while the SDK loads, so two creates cannot both pass
+    try {
+      await this.d.agents.load?.();
+      return this.createLoaded(id, input);
+    } finally {
+      this.starting.delete(id);
+    }
+  }
+
+  private createLoaded(
+    id: string,
+    input: { cwd: string; model: string; effort?: Effort; mode: PermissionMode },
+  ): SessionMeta {
     const meta: SessionMeta = {
-      id: randomUUID(),
+      id,
       cwd: input.cwd,
       model: input.model,
       effort: input.effort ?? null,
@@ -230,7 +250,15 @@ export class SessionManager {
 
   /** Makes sure the session has a live process. Resumes from the transcript when it is closed. */
   async ensureRunning(id: string): Promise<void> {
-    if (this.active.has(id) || this.starting.has(id)) return;
+    if (this.active.has(id)) return;
+    const pending = this.startWaiters.get(id);
+    if (pending) return pending; // a second caller waits for the first start instead of failing
+    const p = this.startRunning(id).finally(() => this.startWaiters.delete(id));
+    this.startWaiters.set(id, p);
+    return p;
+  }
+
+  private async startRunning(id: string): Promise<void> {
     this.checkLimit();
     this.starting.add(id);
     try {
@@ -374,7 +402,7 @@ export class SessionManager {
   /** After a crash or restart, requests nobody can answer any more are closed in the log. */
   private settleDangling(id: string): void {
     const open = new Set<string>();
-    for (const e of this.eventsAfter(id, 0, 100_000)) {
+    for (const e of this.eventsAfter(id, 0, 10_000_000)) {
       if (e.event.k === 'approval_request') open.add(e.event.requestId);
       else if (e.event.k === 'approval_resolved') open.delete(e.event.requestId);
     }

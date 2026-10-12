@@ -51,6 +51,8 @@ restore_or_remove() {
   saved="$backup_dir/$(echo "$f" | tr / _)"
   if [ -f "$STATE_DIR/created.list" ] && grep -qx "$f" "$STATE_DIR/created.list"; then
     if [ -e "$f" ]; then run rm -f "$f"; else note "not present: $f"; fi
+    # The entry is spent. A file an admin creates there later must not be treated as ours.
+    if [ "$DRY" -eq 0 ]; then grep -vxF "$f" "$STATE_DIR/created.list" > "$STATE_DIR/created.list.tmp" || true; mv -f "$STATE_DIR/created.list.tmp" "$STATE_DIR/created.list"; fi
   elif [ -n "$backup_dir" ] && [ -f "$saved" ]; then run cp -a "$saved" "$f"
   elif [ -e "$f" ]; then run rm -f "$f"
   else note "not present: $f"; fi
@@ -78,7 +80,7 @@ if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fai
 
 step "Caddy"
 if [ -e "$CADDY_FILE" ]; then
-  if grep -Eqs "^[[:space:]]*import[[:space:]]+($CADDY_FILE|/etc/caddy/\*\.caddy)" "$CADDY_MAIN"; then
+  if grep -Eqs "^[[:space:]]*import[[:space:]]+$CADDY_FILE([[:space:]]|$)" "$CADDY_MAIN"; then
     note "$CADDY_MAIN still imports the Antlings file. Remove that import line yourself, then validate and reload."
     note "The file $CADDY_FILE is kept until the import is gone."
   else
