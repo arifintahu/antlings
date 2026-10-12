@@ -339,6 +339,63 @@ export const defaultScenario: Scenario = async (text, api) => {
     say(r.behavior === 'allow' ? 'Edited' : 'Skipped');
     return result();
   }
+  if (text === 'showcase') {
+    // Used for the README screenshots: a real-looking answer, two working subagents and a pending edit.
+    say(
+      [
+        'I found the bug. `parseRange` treats an empty end as zero, so **open-ended ranges** return nothing.',
+        '',
+        'Plan:',
+        '',
+        '- add a failing test for `1..`',
+        '- treat a missing end as the last index',
+        '- run the suite again',
+      ].join('\n'),
+    );
+    for (const [id, type, desc, tool] of [
+      ['s1', 'Explore', 'find every caller of parseRange', 'Grep'],
+      ['s2', 'general-purpose', 'write a regression test', 'Write'],
+    ]) {
+      api.emit({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: {
+          content: [
+            { type: 'tool_use', id: `tu-${id}`, name: 'Agent', input: { description: desc, prompt: 'p' } },
+          ],
+        },
+      });
+      api.emit({
+        type: 'system',
+        subtype: 'task_started',
+        task_id: id,
+        tool_use_id: `tu-${id}`,
+        description: desc,
+        subagent_type: type,
+        task_type: 'local_agent',
+      });
+      api.emit({
+        type: 'system',
+        subtype: 'task_progress',
+        task_id: id,
+        description: desc,
+        last_tool_name: tool,
+        usage: { total_tokens: 4200, tool_uses: 3, duration_ms: 8000 },
+      });
+    }
+    const input = {
+      file_path: '/home/dev/app/src/range.ts',
+      old_string: 'const end = Number(parts[1]) || 0;\nreturn items.slice(start, end);',
+      new_string: 'const end = parts[1] ? Number(parts[1]) : items.length;\nreturn items.slice(start, end);',
+    };
+    api.emit({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'tool_use', id: 'tu-show', name: 'Edit', input }] },
+    });
+    await api.ask('Edit', input, 'tu-show');
+    return result();
+  }
   if (text === 'stream') {
     for (const piece of ['Hel', 'lo ', 'world']) {
       api.emit({

@@ -1,12 +1,4 @@
----
-title: Antlings runbook
-status: v0.1
-created: 2026-10-12
-tags: [antlings, runbook, ops]
-related: [PLAN, HANDOFF, 0002-authentication-and-trust-boundary]
----
-
-# Antlings runbook #antlings #ops
+# Antlings runbook
 
 Everything here runs on the VPS as a sudo-capable user. Replace `$VPS_HOST` with your address. Paths are the ones `deploy/install.sh` creates.
 
@@ -119,7 +111,7 @@ sudo systemctl restart antlings
 
 Back up the database before an update. v0.1 only adds tables, but a later release may change columns, and then an older release cannot read the new database.
 
-Test a new Agent SDK version with `spikes/sdk-spike.mjs` and `ANTLINGS_LIVE=1 pnpm --filter @antlings/server test` before building a release. The SDK version is pinned.
+Test a new Agent SDK version with `ANTLINGS_LIVE=1 pnpm --filter @antlings/server test` before building a release. The SDK version is pinned.
 
 ## Reset access (lost passkey)
 
@@ -150,7 +142,7 @@ Edit `/etc/antlings/antlings.env`, then `sudo systemctl restart antlings`. Runni
 | `ANTLINGS_MAX_SESSIONS` | Claude Code processes running at once. Each uses about 200 MB. | 2 |
 | `ANTLINGS_MAX_SUBAGENTS` | `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` for each session | 3 |
 | `ANTLINGS_IDLE_HOURS` | Sign-in idle timeout (also on the Security page) | 12 |
-| `ANTLINGS_AUTH_MODE` | `apikey`, or `subscription` with `ANTLINGS_SUBSCRIPTION_OK=1`. Read [[0003-claude-login-terms]] first. | `apikey` |
+| `ANTLINGS_AUTH_MODE` | `apikey`, or `subscription` with `ANTLINGS_SUBSCRIPTION_OK=1`. Read [0003-claude-login-terms](adr/0003-claude-login-terms.md) first. | `apikey` |
 | `ANTLINGS_HOME` | Root of the folder picker | `/home/antlings` |
 | `ANTLINGS_EVENT_KEEP` | Newest events kept per session in the log. Older ones stay in the Claude transcript. | 20000 |
 
@@ -179,7 +171,7 @@ If the main Caddyfile still imports `antlings.caddy`, remove that line yourself 
 
 ## Known limits
 
-- **The agent can read what the service can read.** The service and the agent run as the same Unix user, so a prompt-injected agent can read `/etc/antlings/antlings.env` (secret key, VAPID key, API key), the database, and `~/.claude/.credentials.json`, and can run `antlings reset-access`. Approvals and step-up protect against a stolen browser session, not against the agent. Use a dedicated API key with a spend cap, keep Bypass mode rare, and read the first item in the threat model of [[0002-authentication-and-trust-boundary]].
+- **The agent can read what the service can read.** The service and the agent run as the same Unix user, so a prompt-injected agent can read `/etc/antlings/antlings.env` (secret key, VAPID key, API key), the database, and `~/.claude/.credentials.json`, and can run `antlings reset-access`. Approvals and step-up protect against a stolen browser session, not against the agent. Use a dedicated API key with a spend cap, keep Bypass mode rare, and read the first item in the threat model of [0002-authentication-and-trust-boundary](adr/0002-authentication-and-trust-boundary.md).
 - The agent can reach every service on `127.0.0.1` (Postgres, Redis, the other Node services) and the cloud metadata address. `ufw` does not cover that. A firewall rule that rejects traffic from the `antlings` user to those ports is the fix, for example with nftables `meta skuid antlings`. It is not part of the installer because it must match your other services.
 - fail2ban counts log lines, and the agent can write log lines. The jail has an `ignoreip` list for that reason. Put your own address in it.
 - Event logs grow with use. Delete a session in the app to remove its log and transcript.

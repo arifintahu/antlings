@@ -1,6 +1,12 @@
 {
   "name": "antlings",
   "private": true,
+  "description": "A self-hosted web UI for Claude Code, with a lead ant per session and a worker ant per subagent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arifintahu/antlings.git"
+  },
   "version": "0.1.0",
   "type": "module",
   "engines": {
