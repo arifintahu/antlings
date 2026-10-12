@@ -127,3 +127,16 @@ test('the welcome screen explains the modes, and the security page shows server 
   await expect(page.getByText(/of \d+ allowed/)).toBeVisible();
   await expectAccessible(page, 'security with status');
 });
+
+test('sending a message scrolls to the newest answer even when the reader was far up', async ({ page }) => {
+  await newSession(page);
+  for (let i = 0; i < 4; i++) {
+    await say(page, 'md');
+    await expect(page.locator('.msg.agent').filter({ hasText: 'Here is' })).toHaveCount(i + 1);
+  }
+  await page.locator('#chat').evaluate((el) => (el.scrollTop = 0));
+  await say(page, 'stream');
+  await expect(page.locator('.msg.agent').filter({ hasText: 'Hello world' })).toHaveCount(1);
+  const gap = await page.locator('#chat').evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+  expect(gap).toBeLessThan(8);
+});

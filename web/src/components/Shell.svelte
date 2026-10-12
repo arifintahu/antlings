@@ -23,6 +23,8 @@
   let chatEl: HTMLElement | undefined = $state();
   let delDlg: HTMLDialogElement;
   let desktop = $state(false);
+  /** After the reader sends a message, keep the newest text in view until the answer is done or they scroll up. */
+  let follow = false;
   let renaming = $state(false);
   let renameText = $state('');
   let renameEl: HTMLInputElement | undefined = $state();
@@ -70,7 +72,8 @@
     const el = chatEl;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (near) void tick().then(() => (el.scrollTop = el.scrollHeight));
+    if (near || follow) void tick().then(() => (el.scrollTop = el.scrollHeight));
+    if (view && !view.turnRunning) follow = false; // the turn is over; stop following
   });
 
   $effect(() => {
@@ -88,7 +91,7 @@
     );
     if (!sent) return; // keep the text so it is not lost
     prompt = '';
-    // Sending is an action of the reader: show the new message and the answer, wherever the view was.
+    follow = true;
     void tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight));
     if (ant) app.focus = 'lead';
   }
@@ -272,7 +275,7 @@
 
     {#if view}
       <Office {view} />
-      <main class="chat" id="chat" bind:this={chatEl} aria-label={ant ? `Subagent ${ant.subagentType}` : 'Conversation'} tabindex="-1">
+      <main class="chat" id="chat" bind:this={chatEl} aria-label={ant ? `Subagent ${ant.subagentType}` : 'Conversation'} tabindex="-1" onscroll={() => { if (chatEl && chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 200) follow = false; }}>
         {#if ant}<AgentDetail {ant} />{:else}<Conversation {view} {archived} />{/if}
         {#if !ant && view.items.length === 0}
           <div class="card"><div class="hd"><span>{STATE_LABEL[view.state]}</span></div><pre>New session. What should we work on?</pre></div>
