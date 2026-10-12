@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
 import {
   addAuthenticator,
   dropSockets,
@@ -11,8 +10,6 @@ import {
   say,
   unlock,
 } from './helpers.js';
-
-const SHOTS = new URL('../../docs/screens/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
 const problems = new WeakMap<Page, string[]>();
 
@@ -172,20 +169,15 @@ test('reconnect after the connection drops: missed events arrive once, in order'
   await expect(page.locator('.msg.user')).toHaveCount(2);
 });
 
-test('phone layout at 375px: no sideways scroll, targets 44px, screenshots', async ({ page }) => {
+test('phone layout at 375px: no sideways scroll, targets 44px', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  mkdirSync(SHOTS, { recursive: true });
-  await page.screenshot({ path: `${SHOTS}phone-empty.png` });
   await newSession(page);
   await say(page, 'agent');
   await expect(page.getByText('Done', { exact: true }).first()).toBeVisible();
-  await page.screenshot({ path: `${SHOTS}phone-conversation.png` });
   await page.getByRole('button', { name: /Agents \(2\)/ }).click();
-  await page.screenshot({ path: `${SHOTS}phone-agents.png` });
   await page.getByRole('button', { name: 'Open sessions' }).click();
   await expect(page.locator('#sidebar')).toHaveClass(/open/);
   await page.waitForTimeout(400); // let the drawer finish sliding in
-  await page.screenshot({ path: `${SHOTS}phone-sessions.png` });
   await page.keyboard.press('Escape');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);

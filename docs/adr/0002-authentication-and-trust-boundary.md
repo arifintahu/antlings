@@ -1,12 +1,4 @@
----
-title: "ADR 0002: Authentication and trust boundary"
-status: accepted
-date: 2026-10-12
-tags: [antlings, adr, security]
-related: [PLAN, 0001-agent-sdk-backend]
----
-
-# ADR 0002: Authentication and trust boundary #antlings #adr #security
+# ADR 0002: Authentication and trust boundary
 
 ## Context
 
@@ -62,7 +54,7 @@ Asset: a shell on the VPS, reached through the agent. An authentication bypass i
 
 ### Remaining risks
 
-1. **The agent and the service run as the same Unix user (`antlings`).** An agent that is told to attack the service can read `antlings.db` and the env file, edit the database, or call `antlings reset-access`. Step-up and approvals protect against a stolen browser session. They do not protect against a prompt-injected agent in Bypass mode. Mitigation for v0.2: run the service as its own user, keep the agent in a second user, and talk over a unix socket. Until then, keep Bypass mode rare and read `docs/HANDOFF.md`.
+1. **The agent and the service run as the same Unix user (`antlings`).** An agent that is told to attack the service can read `antlings.db` and the env file, edit the database, or call `antlings reset-access`. Step-up and approvals protect against a stolen browser session. They do not protect against a prompt-injected agent in Bypass mode. Mitigation for v0.2: run the service as its own user, keep the agent in a second user, and talk over a unix socket. Until then, keep Bypass mode rare and read "Known limits" in [the runbook](../RUNBOOK.md).
 2. **Any local process can reach `127.0.0.1:3100`** and send its own `X-Forwarded-For` and `Origin`. A shell on the VPS is already a larger problem than this.
 3. **Behind Cloudflare** the client address is the edge address unless Caddy is configured with `trusted_proxies`. Five failures from an attacker would then lock out everyone. Do not add Cloudflare without that setting.
 4. **Passkeys are discoverable and require user verification.** A device without a screen lock cannot be used. That is intended.

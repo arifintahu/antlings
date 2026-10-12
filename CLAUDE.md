@@ -1,31 +1,38 @@
 # Antlings
 
-Self-hosted web UI for Claude Code on a Linux VPS. Lead ant per session, worker ant per subagent. Status: design phase, no application code yet.
+Self-hosted web UI for Claude Code on a Linux server. Lead ant per session, worker ant per subagent. Svelte 5 web app, Fastify backend, Claude Agent SDK.
 
-Read first: [docs/PLAN.md](docs/PLAN.md), [docs/sdk-notes.md](docs/sdk-notes.md), [docs/adr/](docs/adr/).
+Start with [README.md](README.md), then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/sdk-notes.md](docs/sdk-notes.md) and [docs/adr/](docs/adr/).
+
+## Commands
+
+- `pnpm install`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm e2e` (Playwright against a fake agent, uses installed Chrome).
+- Fake-agent server: `pnpm --filter @antlings/server exec tsx src/e2e/server.ts` (port 3199).
+- README screenshots: `pnpm --filter @antlings/web e2e showcase` (writes `docs/screens/`).
+- Live SDK test, opt-in and capped at 0.10 USD: `ANTLINGS_LIVE=1 pnpm --filter @antlings/server test`.
 
 ## Rules for this project
 
-- Package manager: pnpm. Language: TypeScript on Node 24 (proposed, confirm in Phase 0).
+- Package manager: pnpm. Language: TypeScript on Node 22 or newer (24 on the server).
 - Write tests first for bugs. Always test authentication, session handling, folder-picker path checks and anything that deletes data.
 - Run the formatter, linter and tests before saying work is done, and report the real output.
-- Commit and push only when asked. Branch off `main`. Conventional Commits. No AI attribution in commits or PRs.
-- Docs use YAML frontmatter, wikilinks between docs (double square brackets around the file name), and `#tags`.
-- Plain wording in docs. Say what a thing does, with numbers where they exist.
+- Branch off `main`. Conventional Commits. Commit and push only when asked.
+- Docs are plain Markdown with relative links. Say what a thing does, with numbers where they exist.
 
-## The VPS
+## Never commit
 
-- Host and SSH user are in `D:\code\memory.md` (outside this repo). Use `$VPS_HOST` in files that are committed. Never write the address, keys, tokens or the Claude login into the repo.
-- Ask before changing anything on the VPS. Read-only inspection is fine. Tests go in `/tmp` and get deleted afterwards.
-- The VPS is small (2 vCPU, 2 GB) and shared with other services. Check free memory before starting load.
-- `~/.claude/.credentials.json` on the VPS holds a login. Do not read it. `accountInfo()` returns an email, so log only its key names.
+- Server addresses, SSH users, domains that belong to a person, keys, tokens, `.env` files, or any Claude login data. Use placeholders such as `ants.example.com` and `$VPS_HOST` in committed files.
+- Local machine paths or notes from outside this repository.
+
+## Working on a server
+
+- Ask before changing anything on a real server. Read-only inspection is fine.
+- Never read `~/.claude/.credentials.json`. `accountInfo()` returns an email, so log only its key names.
+- `deploy/deploy.sh` is the one-command deploy. Pass the target through `VPS_SSH` and `DOMAIN` in your shell, not in a file.
 
 ## Design
 
-- `design/mockup.html` is the visual reference. Preview with `python -m http.server` from `design/`.
-- Keep the ant sprites in code (32x28 canvas, whole-number scaling). Do not add image assets without asking.
+- `design/mockup.html` is the visual reference. The sprite golden tests in `web/src/ants/` are generated from its drawing code.
+- Keep the ant sprites in code (32x28 canvas, whole-number scaling). Do not add image assets for them.
 - Every state needs a text label as well as an animation. Respect `prefers-reduced-motion`.
-
-## Open decisions
-
-Stack confirmation, the subscription terms check, and the two proposed ADRs. See the risk table in the plan.
+- Interface changes must keep the axe checks in the browser tests passing, in light and dark.

@@ -1,12 +1,4 @@
----
-title: "ADR 0003: Claude login and terms"
-status: accepted
-date: 2026-10-12
-tags: [antlings, adr, terms]
-related: [PLAN, 0001-agent-sdk-backend, 0002-authentication-and-trust-boundary]
----
-
-# ADR 0003: Claude login and terms #antlings #adr #terms
+# ADR 0003: Claude login and terms
 
 ## Context
 

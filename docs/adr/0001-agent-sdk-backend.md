@@ -1,12 +1,4 @@
----
-title: "ADR 0001: Build the backend on the Claude Agent SDK"
-status: accepted
-date: 2026-10-12
-tags: [antlings, adr]
-related: [PLAN, sdk-notes]
----
-
-# ADR 0001: Build the backend on the Claude Agent SDK #antlings #adr
+# ADR 0001: Build the backend on the Claude Agent SDK
 
 ## Context
 
@@ -26,12 +18,12 @@ Use option 2. The backend is a Node service that holds one streaming `query()` p
 
 - Option 1 returns screen text. Approvals, subagents and meters would need text parsing.
 - Option 3 projects found in a short search were small and young. None was checked for maintenance, and none matched the ant view or the approval flow.
-- Option 2 exposes every needed feature as a typed call or event. The spike confirmed this on the VPS, see [[sdk-notes]].
+- Option 2 exposes every needed feature as a typed call or event. An early test run on a VPS confirmed this, see [SDK notes](../sdk-notes.md).
 
 ## Consequences
 
 - The VPS needs the `claude` binary and a login. Version 2.1.287 is installed.
-- The SDK version is pinned. Upgrades are tested against the spike script first.
+- The SDK version is pinned. Upgrades are tested with the opt-in live test (`ANTLINGS_LIVE=1`) first.
 - The plan usage call is marked experimental. It sits behind one adapter, and the UI shows "unavailable" when it fails.
 - Each running session costs about 200 MB, so the number of running sessions is capped.
 - A subscription login behind a self-hosted web app needs a terms check before Phase 1.

@@ -1,14 +1,6 @@
----
-title: Agent SDK notes
-status: observed
-created: 2026-10-12
-tags: [antlings, sdk, notes]
-related: [PLAN, 0001-agent-sdk-backend]
----
+# Agent SDK notes
 
-# Agent SDK notes #antlings #sdk
-
-Observed on the VPS on 2026-10-12 with `@anthropic-ai/claude-agent-sdk` 0.3.296 and Claude Code 2.1.287 (`/usr/bin/claude`, Ubuntu 24.04, Node 24). The script is `spikes/sdk-spike.mjs`. The run used three short turns and cost about $0.18 of estimated API value.
+Observed on the VPS on 2026-10-12 with `@anthropic-ai/claude-agent-sdk` 0.3.296 and Claude Code 2.1.287 (`/usr/bin/claude`, Ubuntu 24.04, Node 24). The run used three short turns and cost about $0.18 of estimated API value.
 
 ## Confirmed
 
@@ -41,7 +33,7 @@ Observed on the VPS on 2026-10-12 with `@anthropic-ai/claude-agent-sdk` 0.3.296 
 - `task_progress` did not fire for a subagent that finished in 2 seconds.
 - Memory: one session added about 200 MB resident. One subagent added about 33 MB. One run only.
 - The login used was a Max subscription (`subscription_type: max`). With an API key `rate_limits_available` is false.
-- `omitClaudeMd`, `settingSources: []` and similar options change what the session loads. The spike used `settingSources: []`.
+- `omitClaudeMd`, `settingSources: []` and similar options change what the session loads. The test run used `settingSources: []`.
 
 ## Not tested yet
 
