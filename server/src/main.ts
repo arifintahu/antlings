@@ -7,7 +7,7 @@ import { openDb } from './db.js';
 import { loadEnvFileIfNeeded } from './env.js';
 import { Folders } from './folders.js';
 import { PushService } from './push.js';
-import { SessionManager } from './sessions.js';
+import { repairStoredHistory, SessionManager } from './sessions.js';
 import { sdkTranscripts } from './transcripts.js';
 import { systemClock } from './util.js';
 import { wireApp } from './wiring.js';
@@ -18,6 +18,8 @@ async function main(): Promise<void> {
   const db = openDb(dbPath(config));
   const auth = new Auth(db, systemClock, config, realWebAuthn(config.rpId, config.origin));
   const folders = new Folders(config.home);
+  const repaired = repairStoredHistory(db);
+  if (repaired > 0) console.error(`repaired ${repaired} stored history events`);
   const push = new PushService(db, systemClock, config.vapid);
   auth.onSignin = () => push.signedIn();
   const mgr = new SessionManager({

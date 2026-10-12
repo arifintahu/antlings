@@ -4,7 +4,7 @@ import type { PermissionMode, PlanUsage, ServerMessage, StoredEvent, UiEvent } f
 import type { AgentFactory, AgentHandle, Effort, ModelInfo } from './agent.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
-import { EventMapper, historyEvents } from './events.js';
+import { cleanUserText, EventMapper, historyEvents } from './events.js';
 import { fetchPlanUsage } from './plan.js';
 import type { Transcripts } from './transcripts.js';
 import { randomToken, type Clock } from './util.js';
@@ -187,6 +187,13 @@ export class SessionManager {
          ON CONFLICT(id) DO UPDATE SET cwd = excluded.cwd, model = excluded.model, effort = excluded.effort, mode = excluded.mode`,
       )
       .run(m.id, m.cwd, m.model, m.effort, m.mode, m.createdAt);
+  }
+
+  /** Sessions Antlings started that have no transcript yet (no message sent). */
+  allMeta(): SessionMeta[] {
+    return (this.d.db.prepare('SELECT id FROM session_meta').all() as { id: string }[])
+      .map((r) => this.meta(r.id))
+      .filter((m): m is SessionMeta => !!m);
   }
 
   isRunning(id: string): boolean {
@@ -531,4 +538,32 @@ export class SessionManager {
     }
     return this.models?.list ?? FALLBACK_MODELS;
   }
+}
+
+/**
+ * One-time repair for events stored before `cleanUserText` existed: user events that still hold Claude Code
+ * terminal tags are rewritten in place. Safe to run on every start; clean rows do not match.
+ */
+export function repairStoredHistory(db: Db): number {
+  const rows = db
+    .prepare(
+      "SELECT session_id, seq, data FROM event_log WHERE data LIKE '%<command-name>%' OR data LIKE '%<local-command-%' OR data LIKE '%<system-reminder>%'",
+    )
+    .all() as { session_id: string; seq: number; data: string }[];
+  let fixed = 0;
+  for (const r of rows) {
+    const ev = JSON.parse(r.data) as UiEvent;
+    if (ev.k !== 'user') continue;
+    const c = cleanUserText(ev.text);
+    const next: UiEvent = c.text
+      ? { k: 'user', text: c.text }
+      : { k: 'notice', message: c.stdout || '(terminal command)' };
+    db.prepare('UPDATE event_log SET data = ? WHERE session_id = ? AND seq = ?').run(
+      JSON.stringify(next),
+      r.session_id,
+      r.seq,
+    );
+    fixed++;
+  }
+  return fixed;
 }

@@ -112,6 +112,18 @@ describe('listing, renaming, archiving', () => {
     expect(arch.map((s: { id: string }) => s.id)).toEqual([ID2]);
   });
 
+  it('lists a session that has no message yet', async () => {
+    await setup();
+    const { id } = (await post('/api/sessions', NEW)).json();
+    const active = (await get('/api/sessions')).json().sessions;
+    expect(active.map((s: { id: string }) => s.id)).toContain(id);
+    expect(active.find((s: { id: string }) => s.id === id)).toMatchObject({
+      title: 'New session',
+      cwd: 'proj',
+      running: true,
+    });
+  });
+
   it('renames, archives and unarchives, and archiving closes the process', async () => {
     await setup();
     const { id } = (await post('/api/sessions', NEW)).json();
