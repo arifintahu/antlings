@@ -123,7 +123,7 @@ test('the welcome screen explains the modes, and the security page shows server 
   await expectAccessible(page, 'welcome');
   await page.getByRole('button', { name: 'Security' }).click();
   await expect(page.getByRole('heading', { name: 'Server status' })).toBeVisible();
-  await expect(page.getByText(/^Version \d/)).toBeVisible();
+  await expect(page.locator('#s-server dt', { hasText: 'Version' })).toBeVisible();
   await expect(page.getByText(/of \d+ allowed/)).toBeVisible();
   await expectAccessible(page, 'security with status');
 });
