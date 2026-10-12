@@ -1,20 +1,41 @@
 import { buildApp } from './app.js';
+import { sdkAgentFactory } from './agent.js';
 import { Auth } from './auth/service.js';
 import { realWebAuthn } from './auth/webauthn.js';
 import { dbPath, loadConfig } from './config.js';
 import { openDb } from './db.js';
 import { loadEnvFileIfNeeded } from './env.js';
+import { Folders } from './folders.js';
+import { SessionManager } from './sessions.js';
+import { sdkTranscripts } from './transcripts.js';
 import { systemClock } from './util.js';
+import { wireApp } from './wiring.js';
 
 async function main(): Promise<void> {
   loadEnvFileIfNeeded();
   const config = loadConfig();
   const db = openDb(dbPath(config));
   const auth = new Auth(db, systemClock, config, realWebAuthn(config.rpId, config.origin));
-  const app = await buildApp({ auth });
+  const folders = new Folders(config.home);
+  const mgr = new SessionManager({
+    db,
+    clock: systemClock,
+    config,
+    agents: sdkAgentFactory(config),
+    transcripts: sdkTranscripts,
+    audit: (kind, detail) => auth.audit(kind, undefined, detail),
+  });
+  const app = await buildApp({
+    auth,
+    extend: (a) => wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts }),
+  });
+  const reaper = setInterval(() => mgr.reapIdle(), 60_000);
+  reaper.unref();
   await app.listen({ host: config.host, port: config.port });
   console.error(`antlings listening on ${config.host}:${config.port} (origin ${config.origin})`);
   const stop = async () => {
+    clearInterval(reaper);
+    mgr.closeAll();
     await app.close();
     db.close();
     process.exit(0);

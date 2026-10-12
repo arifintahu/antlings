@@ -4,7 +4,7 @@ import type { PermissionMode, PlanUsage, ServerMessage, StoredEvent, UiEvent } f
 import type { AgentFactory, AgentHandle, Effort, ModelInfo } from './agent.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
-import { EventMapper } from './events.js';
+import { EventMapper, historyEvents } from './events.js';
 import { fetchPlanUsage } from './plan.js';
 import type { Transcripts } from './transcripts.js';
 import { randomToken, type Clock } from './util.js';
@@ -54,6 +54,7 @@ export interface ManagerDeps {
   transcripts: Transcripts;
   audit: (kind: string, detail?: unknown) => void;
   notifier?: Notifier;
+  maxBudgetUsd?: number;
 }
 
 type Listener = (m: ServerMessage) => void;
@@ -137,6 +138,14 @@ export class SessionManager {
     if (!set) this.listeners.set(id, (set = new Set()));
     set.add(send);
     return () => set.delete(send);
+  }
+
+  /** For a session with no event log (started in the terminal), builds one from the transcript. */
+  async importHistory(id: string): Promise<void> {
+    const has = this.d.db.prepare('SELECT 1 FROM event_log WHERE session_id = ? LIMIT 1').get(id);
+    if (has || this.removed.has(id)) return;
+    const events = historyEvents(await this.d.transcripts.messages(id));
+    for (const e of events) this.emit(id, e);
   }
 
   // ---- metadata and state ----
@@ -259,6 +268,7 @@ export class SessionManager {
       effort: meta.effort ?? undefined,
       mode: meta.mode,
       canUseTool: this.canUseTool(a),
+      maxBudgetUsd: this.d.maxBudgetUsd,
     });
     this.active.set(id, a);
     void this.pump(a);
@@ -456,7 +466,7 @@ export class SessionManager {
   async remove(id: string): Promise<void> {
     this.close(id);
     this.removed.add(id);
-    await this.d.transcripts.remove(id);
+    await this.d.transcripts.remove(id).catch(() => undefined); // no transcript yet is fine
     this.d.db.prepare('DELETE FROM event_log WHERE session_id = ?').run(id);
     this.d.db.prepare('DELETE FROM session_meta WHERE id = ?').run(id);
     this.seqCache.delete(id);

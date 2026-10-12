@@ -149,3 +149,26 @@ export class EventMapper {
     return out;
   }
 }
+
+interface HistoryMessage {
+  type: string;
+  message: unknown;
+  parent_tool_use_id: string | null;
+}
+
+/** Converts transcript messages (from the SDK's session readers) to UI events, for sessions with no event log. */
+export function historyEvents(messages: HistoryMessage[], limit = 2000): UiEvent[] {
+  const mapper = new EventMapper();
+  const out: UiEvent[] = [];
+  for (const m of messages) {
+    const msg = m.message as { content?: unknown } | undefined;
+    if (m.type === 'user' && !m.parent_tool_use_id) {
+      const text = textOf(msg?.content);
+      if (text) out.push({ k: 'user', text: clip(text, 20_000) });
+    }
+    if (m.type === 'user' || m.type === 'assistant') {
+      for (const e of mapper.map(m as unknown as SDKMessage)) if (e.k !== 'state') out.push(e);
+    }
+  }
+  return out.slice(-limit);
+}

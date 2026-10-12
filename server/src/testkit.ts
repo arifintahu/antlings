@@ -6,7 +6,11 @@ import type { StoredPasskey, WebAuthnService } from './auth/webauthn.js';
 import { loadConfig, type Config } from './config.js';
 import { FakeAgents, FakeTranscripts } from './fakeAgent.js';
 import { SessionManager } from './sessions.js';
-import { attachWebSocket } from './ws.js';
+import { Folders } from './folders.js';
+import { wireApp } from './wiring.js';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import WebSocket from 'ws';
 import { openDb } from './db.js';
 import { randomToken, type Clock } from './util.js';
@@ -60,6 +64,9 @@ export interface Creds {
 export interface Kit {
   app: FastifyInstance;
   mgr: SessionManager;
+  /** A real temporary home folder; Antlings may only touch folders inside it. */
+  home: string;
+  folders: Folders;
   agents: FakeAgents;
   transcripts: FakeTranscripts;
   /** Starts listening on a free port and returns an opener for authenticated WebSocket clients. */
@@ -96,7 +103,10 @@ export async function makeKit(
 ): Promise<Kit> {
   const clock = new FakeClock();
   const logs: string[] = [];
-  const config = testConfig(env);
+  const homeDir = mkdtempSync(join(tmpdir(), 'antlings-home-'));
+  mkdirSync(join(homeDir, 'proj'));
+  const config = testConfig({ ANTLINGS_HOME: homeDir, ...env });
+  const folders = new Folders(homeDir);
   const auth = new Auth(openDb(':memory:'), clock, config, fakeWebAuthn, (l) => logs.push(l));
   const agents = new FakeAgents();
   const transcripts = new FakeTranscripts();
@@ -111,7 +121,8 @@ export async function makeKit(
   const app = await buildApp({
     auth,
     extend: (a) => {
-      attachWebSocket(a, auth, mgr, transcripts);
+      wireApp(a, { auth, mgr, folders, transcripts });
+      a.addHook('onClose', async () => rmSync(homeDir, { recursive: true, force: true }));
     },
     ...over,
   });
@@ -210,5 +221,20 @@ export async function makeKit(
     };
   };
 
-  return { app, mgr, agents, transcripts, listen, auth, clock, logs, signIn, challengeOf, stepUp, call };
+  return {
+    app,
+    mgr,
+    home: folders.home,
+    folders,
+    agents,
+    transcripts,
+    listen,
+    auth,
+    clock,
+    logs,
+    signIn,
+    challengeOf,
+    stepUp,
+    call,
+  };
 }

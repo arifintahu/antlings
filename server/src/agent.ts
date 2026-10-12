@@ -22,6 +22,8 @@ export interface StartOptions {
   effort?: Effort;
   mode: PermissionMode;
   canUseTool: CanUseTool;
+  /** Hard spend cap for the process. Set by live tests. */
+  maxBudgetUsd?: number;
 }
 
 export interface ContextUsage {
@@ -130,6 +132,7 @@ export function sdkAgentFactory(config: Config): AgentFactory {
           ...(o.mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
           ...(o.resume ? { resume: o.sessionId } : { sessionId: o.sessionId }),
           canUseTool: o.canUseTool,
+          ...(o.maxBudgetUsd ? { maxBudgetUsd: o.maxBudgetUsd } : {}),
           abortController: abort,
         },
       });
