@@ -121,3 +121,19 @@ describe('status and push test', () => {
     expect(kit.pushSent.at(-1)?.payload).toMatchObject({ title: 'Antlings test' });
   });
 });
+
+describe('approval ordering', () => {
+  it('logs the tool call before its approval request, and the state stays "approval" while waiting', async () => {
+    kit = await makeKit();
+    const { id } = await kit.mgr.create(NEW);
+    await kit.mgr.send(id, 'tool');
+    await until(() => kit.mgr.eventsAfter(id, 0).some((e) => e.event.k === 'approval_request'));
+    const evs = kit.mgr.eventsAfter(id, 0).map((e) => e.event);
+    const toolAt = evs.findIndex((e) => e.k === 'tool_use');
+    const askAt = evs.findIndex((e) => e.k === 'approval_request');
+    expect(toolAt).toBeGreaterThan(-1);
+    expect(toolAt).toBeLessThan(askAt);
+    expect(evs.filter((e) => e.k === 'state').at(-1)).toMatchObject({ state: 'approval' });
+    expect(evs[askAt]).toMatchObject({ toolUseId: 'tu-1' });
+  });
+});

@@ -54,7 +54,8 @@ test('approve and deny a tool request', async ({ page }) => {
   await expectAccessible(page, 'approval card');
   await card.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText('Listed')).toBeVisible();
-  await expect(page.locator('.card.good')).toContainText('approved');
+  await expect(page.locator('.toolcard').last()).toContainText('approved');
+  await expect(page.locator('.toolcard')).toHaveCount(1); // one card per call, not a tool card plus an approval card
 
   await say(page, 'tool');
   await page.locator('.card.warn').getByRole('button', { name: 'Deny' }).click();
@@ -96,11 +97,8 @@ test('archive and unarchive', async ({ page }) => {
   await page.locator('#sessmenu').getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByText('No session open')).toBeVisible();
   await page.getByRole('tab', { name: /Archived 1/ }).click();
-  await expect(page.getByRole('button', { name: /Session/ }).first()).toBeVisible();
-  await page
-    .getByRole('button', { name: /Session/ })
-    .first()
-    .click();
+  await expect(page.locator('.row').first()).toBeVisible();
+  await page.locator('.row').first().click();
   await expect(page.getByText('This session is archived')).toBeVisible();
   await expect(page.getByLabel('Message')).toBeDisabled();
   await page.getByRole('button', { name: 'Unarchive' }).first().click();

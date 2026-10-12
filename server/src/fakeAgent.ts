@@ -20,7 +20,7 @@ const asMsg = (m: Record<string, unknown>): SDKMessage => m as unknown as SDKMes
 
 export interface Api {
   emit(m: Record<string, unknown>): void;
-  ask(toolName: string, input: Record<string, unknown>): Promise<PermissionResult>;
+  ask(toolName: string, input: Record<string, unknown>, toolUseId?: string): Promise<PermissionResult>;
   /** Resolves when the turn is interrupted or the task is stopped. */
   untilStopped(taskId?: string): Promise<'interrupt' | 'stop'>;
 }
@@ -72,10 +72,10 @@ export class FakeHandle implements AgentHandle {
 
   private api: Api = {
     emit: (m) => this.push(asMsg({ uuid: uid(), session_id: this.opts.sessionId, ...m })),
-    ask: async (toolName, input) =>
+    ask: async (toolName, input, toolUseId) =>
       (await this.opts.canUseTool(toolName, input, {
         signal: new AbortController().signal,
-        toolUseID: uid(),
+        toolUseID: toolUseId ?? uid(),
       } as never)) ?? {
         behavior: 'deny',
         message: 'no decision',
@@ -177,7 +177,7 @@ export const defaultScenario: Scenario = async (text, api) => {
       parent_tool_use_id: null,
       message: { content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: 'ls' } }] },
     });
-    const r = await api.ask('Bash', { command: 'ls' });
+    const r = await api.ask('Bash', { command: 'ls' }, 'tu-1');
     api.emit({
       type: 'user',
       parent_tool_use_id: null,
@@ -299,6 +299,44 @@ export const defaultScenario: Scenario = async (text, api) => {
       summary: 'Concurrent subagent limit reached',
       output_file: '',
     });
+    return result();
+  }
+  if (text === 'md') {
+    say(
+      [
+        'Here is **bold**, `code` and a [good](https://example.com/x) link, a [bad](javascript:alert(1)) one.',
+        '',
+        '- one',
+        '- two',
+        '',
+        '```ts',
+        'const a = 1;',
+        '```',
+      ].join('\n'),
+    );
+    return result();
+  }
+  if (text === 'edit') {
+    api.emit({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu-e',
+            name: 'Edit',
+            input: { file_path: '/home/u/a.ts', old_string: 'foo()', new_string: 'bar()' },
+          },
+        ],
+      },
+    });
+    const r = await api.ask(
+      'Edit',
+      { file_path: '/home/u/a.ts', old_string: 'foo()', new_string: 'bar()' },
+      'tu-e',
+    );
+    say(r.behavior === 'allow' ? 'Edited' : 'Skipped');
     return result();
   }
   if (text === 'stream') {

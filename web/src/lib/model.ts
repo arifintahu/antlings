@@ -44,6 +44,8 @@ export type Item =
       name: string;
       input: unknown;
       result?: { ok: boolean; text: string };
+      /** The approval for this very call, shown inside the same card. */
+      approval?: ApprovalView;
     }
   | ({ kind: 'approval'; seq: number } & ApprovalView)
   | { kind: 'spawn'; seq: number; taskId: string }
@@ -70,10 +72,35 @@ export interface SessionView {
   turnRunning: boolean;
   /** Hidden when the page gets the same seq twice (a reconnect race). */
   seen: number;
+  /** Text of the lead's answer while it is still being written. Replaced by the final message. */
+  streaming: string;
+  /** Sum of the cost the SDK reported for each turn. */
+  costUsd: number;
+  /** Position in `items` by tool call id and by approval request id, so lookups stay cheap in long sessions. */
+  toolIndex: Record<string, number>;
+  approvalIndex: Record<string, number>;
+}
+
+/** Adds live text from the lead. Not part of the event log. */
+export function applyDelta(v: SessionView, text: string): void {
+  v.streaming += text;
 }
 
 export function newView(id: string): SessionView {
-  return { id, lastSeq: 0, synced: false, items: [], ants: [], state: 'idle', turnRunning: false, seen: 0 };
+  return {
+    streaming: '',
+    costUsd: 0,
+    toolIndex: {},
+    approvalIndex: {},
+    id,
+    lastSeq: 0,
+    synced: false,
+    items: [],
+    ants: [],
+    state: 'idle',
+    turnRunning: false,
+    seen: 0,
+  };
 }
 
 /** A one-line summary of a tool input for logs and cards. */
@@ -95,13 +122,17 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
   v.lastSeq = seq;
   switch (ev.k) {
     case 'user':
+      v.streaming = '';
       v.items.push({ kind: 'user', seq, text: ev.text });
       v.turnRunning = true;
       break;
     case 'assistant_text': {
       const ant = antFor(v, ev.parentToolUseId);
       if (ant) ant.state = ant.state === 'approval' ? 'approval' : 'thinking';
-      else v.items.push({ kind: 'agent', seq, text: ev.text });
+      else {
+        v.streaming = '';
+        v.items.push({ kind: 'agent', seq, text: ev.text });
+      }
       break;
     }
     case 'tool_use': {
@@ -111,6 +142,8 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
         ant.lastTool = ev.name;
         if (ant.state !== 'approval') ant.state = 'tool';
       } else if (ev.name !== 'Agent' && ev.name !== 'Task') {
+        v.streaming = '';
+        v.toolIndex[ev.toolUseId] = v.items.length;
         v.items.push({ kind: 'tool', seq, toolUseId: ev.toolUseId, name: ev.name, input: ev.input });
       }
       break;
@@ -122,7 +155,7 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
         if (l) l.st = ev.ok ? 'ok' : 'fail';
         if (ant.state === 'tool') ant.state = 'thinking';
       } else {
-        const t = v.items.find((i) => i.kind === 'tool' && i.toolUseId === ev.toolUseId);
+        const t = v.items[v.toolIndex[ev.toolUseId] ?? -1];
         if (t && t.kind === 'tool') t.result = { ok: ev.ok, text: ev.text };
       }
       break;
@@ -141,7 +174,17 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
         ant.state = 'approval';
         const l = ev.toolUseId ? ant.log.find((x) => x.toolUseId === ev.toolUseId) : undefined;
         if (l) l.st = 'ask';
-      } else v.items.push({ kind: 'approval', seq, ...a });
+      } else {
+        const tool = ev.toolUseId !== undefined ? v.items[v.toolIndex[ev.toolUseId] ?? -1] : undefined;
+        if (tool && tool.kind === 'tool') {
+          // One card per call: the approval buttons live in the tool card.
+          tool.approval = a;
+          v.approvalIndex[ev.requestId] = v.toolIndex[ev.toolUseId!]!;
+        } else {
+          v.approvalIndex[ev.requestId] = v.items.length;
+          v.items.push({ kind: 'approval', seq, ...a });
+        }
+      }
       break;
     }
     case 'approval_resolved': {
@@ -153,8 +196,9 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
         const l = ant.log.find((x) => x.st === 'ask');
         if (l) l.st = ev.decision === 'allow' ? 'run' : 'fail';
       }
-      const it = v.items.find((i) => i.kind === 'approval' && i.requestId === ev.requestId);
-      if (it && it.kind === 'approval') it.status = decision;
+      const it = v.items[v.approvalIndex[ev.requestId] ?? -1];
+      if (it?.kind === 'approval') it.status = decision;
+      else if (it?.kind === 'tool' && it.approval) it.approval.status = decision;
       break;
     }
     case 'task_started':
@@ -208,6 +252,8 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
       break;
     case 'turn_done':
       v.turnRunning = false;
+      v.streaming = '';
+      if (typeof ev.costUsd === 'number') v.costUsd += ev.costUsd;
       break;
     case 'context':
       v.context = { percentage: ev.percentage, totalTokens: ev.totalTokens, maxTokens: ev.maxTokens };
@@ -221,6 +267,7 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
       v.items.push({ kind: 'notice', seq, text: ev.message, bad: false });
       break;
     case 'error':
+      v.streaming = '';
       v.items.push({ kind: 'notice', seq, text: ev.message, bad: true });
       v.state = 'error';
       v.turnRunning = false;

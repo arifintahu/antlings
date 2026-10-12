@@ -36,7 +36,7 @@ const transcripts = new FakeTranscripts();
 class Agents extends FakeAgents {
   override start(o: Parameters<FakeAgents['start']>[0]) {
     if (!transcripts.items.has(o.sessionId)) {
-      transcripts.add(o.sessionId, { cwd: o.cwd, summary: 'Session', lastModified: Date.now() });
+      transcripts.add(o.sessionId, { cwd: o.cwd, summary: 'New session', lastModified: Date.now() });
     }
     return super.start(o);
   }

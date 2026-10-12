@@ -405,8 +405,11 @@ export class SessionManager {
   }
 
   private canUseTool(a: Active): CanUseTool {
-    return (toolName, input, opts) =>
-      new Promise((resolve) => {
+    return async (toolName, input, opts) => {
+      // The assistant message that holds this tool call may still be queued in the message loop. Let it be
+      // logged first, so the log reads tool call, then approval, and the "waiting" state is not overwritten.
+      await new Promise<void>((r) => setImmediate(r));
+      return new Promise((resolve) => {
         const requestId = randomToken(9);
         a.pending.set(requestId, { resolve, toolName, input });
         this.emit(a.id, {
@@ -428,6 +431,7 @@ export class SessionManager {
           },
         );
       });
+    };
   }
 
   private settle(

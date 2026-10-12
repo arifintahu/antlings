@@ -23,6 +23,10 @@ After the build, you authorized a test deploy to `$VPS_HOST` with the domain `an
 
 To finish: set `ANTHROPIC_API_KEY` (or log in as the service user), run `sudo -u antlings antlings setup`, open https://ants.arifintahu.com, register your passkey, and start a first session.
 
+## 0b. Update after user testing
+
+From the live test: token streaming, approval previews (command, file content, diff), markdown answers, one card per tool call, mode and model badge, inline rename, pins, search, projects grouping, last-used defaults, reconnect notice, a banner for approvals waiting in another session, cost per session, a server status section, a push test button, event retention, a leaner service-worker cache, an onboarding card, and `deploy/deploy.sh`. Memory settings were left to you. See [[DECISIONS]].
+
 ## 1. Result in 10 lines
 
 1. Built: sign-in (passkey, or password plus authenticator code), server-side sessions, step-up checks, lockout, audit log.

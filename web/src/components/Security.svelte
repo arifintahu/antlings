@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { ApiError, del, get, patch, post } from '../lib/api.js';
   import { disablePush, enablePush, pushState, type PushState } from '../lib/push.js';
-  import { app } from '../lib/store.svelte.js';
+  import { app, type StatusDto } from '../lib/store.svelte.js';
   import Qr from './Qr.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -27,6 +27,8 @@
   let fbOpen = $state(false);
   let rootEl: HTMLElement | undefined = $state();
   let deviceName = $state('');
+  let status = $state<StatusDto | null>(null);
+  let testMsg = $state('');
   // Bumped on every reload so one-way controls redraw with the server's value after a refused change.
   let version = $state(0);
 
@@ -46,6 +48,7 @@
 
   onMount(() => {
     void load();
+    app.status().then((s) => (status = s)).catch(() => undefined);
     void pushState().then((s) => (push = s));
     rootEl?.querySelector<HTMLElement>('h1')?.focus();
   });
@@ -131,6 +134,18 @@
     await guarded('Changing sign-in alerts.', () => patch('/api/security/settings', { signinAlerts: on }));
     await load();
   }
+
+  async function sendTest() {
+    testMsg = '';
+    try {
+      const r = await app.testPush();
+      testMsg = r.sent > 0 ? `Sent to ${r.sent} ${r.sent === 1 ? 'device' : 'devices'}. It should arrive in a few seconds.` : 'No device is subscribed yet. Turn notifications on first.';
+    } catch {
+      testMsg = 'The test could not be sent.';
+    }
+  }
+
+  const upFor = (s: number) => (s >= 86400 ? `${Math.floor(s / 86400)} d ${Math.floor((s % 86400) / 3600)} h` : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.max(1, Math.floor(s / 60))} min`);
 
   async function togglePush() {
     err = '';
@@ -223,6 +238,22 @@
         <p class="pw-hint">Notifications are blocked in this browser's settings.</p>
       {:else}
         <button class="btn" type="button" onclick={togglePush}>{push === 'on' ? 'Turn off push notifications' : 'Notify me when an approval is waiting'}</button>
+        {#if push === 'on'}
+          <button class="btn add" type="button" onclick={sendTest}>Send a test notification</button>
+          <div class="hint" role="status">{testMsg}</div>
+        {/if}
+      {/if}
+
+      <h2>Server status</h2>
+      {#if status}
+        <div class="srow"><div><div class="t">Version {status.version}</div><div class="m">Running for {upFor(status.uptimeSec)}</div></div></div>
+        <div class="srow"><div><div class="t">Memory</div><div class="m">Service {status.serviceMemoryMb} MB · host {status.hostMemory.freeMb} MB free of {status.hostMemory.totalMb} MB</div></div></div>
+        <div class="srow"><div><div class="t">Sessions running</div><div class="m">{status.sessions.running} of {status.sessions.max} allowed</div></div></div>
+        <div class="srow"><div><div class="t">Database</div><div class="m">{status.database.sizeMb} MB · {status.database.events} stored events (newest {status.eventKeep} kept per session)</div></div></div>
+        <div class="srow"><div><div class="t">Last sign-in</div><div class="m">{status.lastSignin ? `${when(status.lastSignin.at)}${status.lastSignin.ip ? ` · ${status.lastSignin.ip}` : ''}` : 'none yet'}</div></div></div>
+        <div class="srow"><div><div class="t">Push devices</div><div class="m">{status.pushDevices}</div></div></div>
+      {:else}
+        <p class="muted">Loading…</p>
       {/if}
 
       <h2>Recent activity</h2>

@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { argOf, fmtDur, fmtK, isBusy, type AntView } from '../lib/model.js';
+  import { fmtDur, fmtK, isBusy, type AntView } from '../lib/model.js';
   import { app } from '../lib/store.svelte.js';
   import Chip from './Chip.svelte';
+  import ToolPreview from './ToolPreview.svelte';
 
   let { ant }: { ant: AntView } = $props();
 
@@ -53,7 +54,7 @@
 {#if ant.approval && ant.approval.status === 'waiting'}
   <div class="card warn">
     <div class="hd"><span>{ant.approval.toolName} · requested by {ant.subagentType}</span></div>
-    <pre>{ant.approval.title ? `${ant.approval.title}\n` : ''}{argOf(ant.approval.input)}</pre>
+    <ToolPreview name={ant.approval.toolName} input={ant.approval.input} />
     <div class="acts">
       <button class="btn primary" type="button" onclick={() => app.approve(ant.approval!.requestId)}>Approve</button>
       <button class="btn danger" type="button" onclick={() => app.deny(ant.approval!.requestId)}>Deny</button>
