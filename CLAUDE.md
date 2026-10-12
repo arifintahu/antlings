@@ -32,7 +32,7 @@ Start with [README.md](README.md), then [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Design
 
-- `design/mockup.html` is the visual reference. The sprite golden tests in `web/src/ants/` are generated from its drawing code.
+- The sprite golden tests in `web/src/ants/` pin the art by hash (`golden.json`). Change the art only on purpose.
 - Keep the ant sprites in code (32x28 canvas, whole-number scaling). Do not add image assets for them.
 - Every state needs a text label as well as an animation. Respect `prefers-reduced-motion`.
 - Interface changes must keep the axe checks in the browser tests passing, in light and dark.

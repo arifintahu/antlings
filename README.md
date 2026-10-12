@@ -146,7 +146,6 @@ The opt-in live test calls the real SDK with Haiku and is capped at 0.10 USD: `A
 | `web/` | Svelte 5 app, ant sprites (`src/ants/draw.ts`), PWA files, Playwright tests (`e2e/`) |
 | `shared/` | Protocol types and request schemas used by both |
 | `deploy/` | systemd unit, Caddy snippet, fail2ban files, installer, release build, smoke tests |
-| `design/` | The HTML mockup that the ant sprites were drawn in |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md), [runbook](docs/RUNBOOK.md), [SDK notes](docs/sdk-notes.md), [decision records](docs/adr/) |
 
 The screenshots above are made by `pnpm --filter @antlings/web e2e showcase`. Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).

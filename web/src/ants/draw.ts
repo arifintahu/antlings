@@ -1,7 +1,7 @@
 /**
- * Ant sprite renderer: a 32x28 logical canvas, ported from design/mockup.html.
+ * Ant sprite renderer: a 32x28 logical canvas.
  * Do not change the drawing calls. web/src/ants/draw.test.ts compares a hash of every
- * state and look against values taken from the mockup, so edits cannot alter the art by accident.
+ * state and look against golden.json, so edits cannot alter the art by accident.
  */
 
 export type AntState = 'idle' | 'thinking' | 'tool' | 'approval' | 'done' | 'error';
