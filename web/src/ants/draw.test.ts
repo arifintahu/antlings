@@ -33,7 +33,7 @@ describe('ant sprites', () => {
     for (const state of STATES) {
       for (const lead of [false, true]) {
         const key = `${li}:${state}:${lead ? 'lead' : 'worker'}`;
-        it(`draws ${key} exactly as the mockup does (25 frames)`, () => {
+        it(`draws ${key} exactly as the stored hash (25 frames)`, () => {
           expect(hashFrames(li, state, lead)).toBe((golden as Record<string, string>)[key]);
         });
       }

@@ -26,7 +26,7 @@ You do not need a Claude login to develop. The tests and `pnpm --filter @antling
 
 ## Guidelines
 
-- Keep the ant sprites in code (`web/src/ants/draw.ts`). The golden hash tests will tell you if the art changes. Regenerate them on purpose with `web/scripts/gen-sprite-golden.mjs`.
+- Keep the ant sprites in code (`web/src/ants/draw.ts`). The golden hash tests (`web/src/ants/golden.json`) fail if the art changes. If you change it on purpose, update the hashes in that file.
 - Every state needs a text label as well as an animation, and `prefers-reduced-motion` must be respected.
 - Interface changes should keep the axe checks in the browser tests passing, in light and dark.
 - Plain wording in docs. Say what a thing does, with numbers where they exist.
