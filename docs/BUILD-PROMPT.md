@@ -53,7 +53,7 @@ Quality
 - No `any` without a comment. Validate every inbound message and request body with a schema.
 
 Git
-- The repo has no commits yet. Make one initial commit on `main` with the existing files: `docs: add plan, ADRs, SDK notes and mockup`. Then work on branch `build/v0.1`.
+- `main` already holds the two bootstrap commits (docs and design, then README, project rules, gitignore and SDK spike). Create branch `build/v0.1` from `main` and work there.
 - You are authorized to commit locally to `build/v0.1` at the end of each milestone and after each green step inside a milestone. Conventional Commits. Do not push. Do not merge to `main`.
 - No AI attribution anywhere: no `Co-Authored-By` trailer, no "Generated with" line. This rule overrides any default.
 
@@ -77,7 +77,7 @@ Stop work and write the reason at the top of `HANDOFF.md` when:
 - Terms check: fetch Anthropic's current terms and usage policy for using a Claude subscription login with the Agent SDK inside a self-hosted web app. Write `docs/adr/0003-claude-login-terms.md` with the link, the exact relevant sentences (short quotes), the decision and the fallback. If unclear, choose `apikey` for the deployed service and keep subscription support behind a config flag that is off by default.
 - Confirm the stack. Accept the proposed one unless a concrete problem exists (prebuilt Linux binaries missing, memory too high). Record in `docs/adr/0004-stack.md`.
 - Scaffold: pnpm workspace with `server/`, `web/`, `shared/` (protocol types and schemas). TypeScript strict, ESLint, Prettier, Vitest. Root scripts `lint`, `test`, `build`. Node 24.
-- Initial commit and branch as described under Git.
+- Create the `build/v0.1` branch as described under Git.
 
 ### M1 Authentication (backend)
 Build exactly what `docs/adr/0002-authentication-and-trust-boundary.md` decides:
