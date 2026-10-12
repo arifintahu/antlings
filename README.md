@@ -1,8 +1,8 @@
 # Antlings
 
-A self-hosted web UI for [Claude Code](https://code.claude.com). Run it on your own Linux server, open it from a laptop or a phone, and drive Claude Code sessions from the browser.
+**Your Claude Code colony, in a browser.**
 
-Every session has a **lead ant**. Every subagent the lead starts becomes a **worker ant** at its own desk, so you can see who is thinking, running a tool, waiting for you, or done.
+Antlings is a small pixel-art colony that runs [Claude Code](https://code.claude.com) on your own Linux server. Start a task from your laptop, close the lid, and check on it from your phone. Every session has a **lead ant** with a crown. Every subagent it starts becomes a **worker ant** at its own desk, so you can see at a glance who is thinking, running a tool, waiting for your approval, or done.
 
 ![Antlings on a desktop: sessions on the left, the lead ant and two worker ants on top, a diff waiting for approval below](docs/screens/desktop-conversation.png)
 
@@ -15,6 +15,21 @@ Every session has a **lead ant**. Every subagent the lead starts becomes a **wor
 The Security page: passkeys, signed-in devices, notifications, server status and recent activity.
 
 ![The Security page with a section bar, one card per section and status tiles](docs/screens/desktop-security.png)
+
+## The story
+
+Claude Code works like a colony. One agent takes your request and breaks it up, then hands the pieces to helpers that go off and do them. In a terminal that looks like a scroll of text. You cannot tell which helper is stuck, which one is waiting for a yes from you, and which one has finished.
+
+The first version of this idea was a remote desktop in a browser. It worked, but it spent memory on a whole desktop and a browser tab that the job never needed, on a server with 2 GB. All the job really needs is: start a session, watch it, approve or deny what it wants to do, and come back later. So Antlings is only that, in about 100 MB.
+
+Ants fit because they do the same thing at a small scale. Many tiny workers, each with one job, coordinated by one that knows the plan. So:
+
+- The **lead ant** wears a crown and sits at the main desk for the session. It has a name, such as Eli, Ana or Zed.
+- Each **worker ant** is a subagent. It gets its own desk, vest colour and name, and appears when the lead starts it.
+- An ant's desk shows what it is doing: **idle**, **thinking**, **running a tool**, **needs approval** (an exclamation mark above its head), **done**, or **error**. The same state is also written as text under the ant, so nothing depends on the animation.
+- When you finish the first-run setup, the page says "Your colony is ready" and a crowned ant moves in.
+
+The ants are drawn in code on a 32x28 pixel canvas, not shipped as images. They stop moving when your system asks for reduced motion.
 
 ## Features
 
