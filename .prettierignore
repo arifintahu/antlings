@@ -1,0 +1,12 @@
+dist
+node_modules
+design
+spikes
+pnpm-lock.yaml
+docs
+*.md
+*.svelte
+web/test-results
+web/playwright-report
+web/public
+deploy
