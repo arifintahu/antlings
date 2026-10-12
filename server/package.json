@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests",
+    "test": "tsc -p tsconfig.check.json && vitest run",
     "dev": "tsx src/main.ts"
   },
   "dependencies": {
@@ -18,7 +18,8 @@
     "fastify": "5.12.5",
     "otpauth": "9.5.2",
     "web-push": "3.6.7",
-    "ws": "8.22.0"
+    "ws": "8.22.0",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
