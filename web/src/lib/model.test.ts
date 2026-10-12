@@ -1,6 +1,6 @@
 import type { UiEvent } from '@antlings/shared';
 import { describe, expect, it } from 'vitest';
-import { applyEvent, counts, newView, type SessionView } from './model.js';
+import { applyDelta, applyEvent, counts, newView, type SessionView } from './model.js';
 
 const run = (events: UiEvent[], v: SessionView = newView('s')) => {
   events.forEach((e, i) => applyEvent(v, v.lastSeq + 1 + i * 0, 1000 + i, e));
@@ -159,5 +159,50 @@ describe('applyEvent', () => {
       context: { percentage: 12 },
     });
     expect(v.items.at(-1)).toMatchObject({ kind: 'notice', bad: true });
+  });
+
+  it('puts the approval inside the tool card of the same call (one card, not two)', () => {
+    const v = feed(
+      newView('s'),
+      { k: 'tool_use', toolUseId: 'w1', name: 'Write', input: { file_path: 'a' } },
+      {
+        k: 'approval_request',
+        requestId: 'r1',
+        toolName: 'Write',
+        toolUseId: 'w1',
+        input: { file_path: 'a' },
+      },
+    );
+    expect(v.items.map((i) => i.kind)).toEqual(['tool']);
+    expect(v.items[0]).toMatchObject({ approval: { requestId: 'r1', status: 'waiting' } });
+    feed(
+      v,
+      { k: 'approval_resolved', requestId: 'r1', decision: 'allow' },
+      { k: 'tool_result', toolUseId: 'w1', ok: true, text: 'done' },
+    );
+    expect(v.items[0]).toMatchObject({ approval: { status: 'allowed' }, result: { ok: true } });
+  });
+
+  it('streams text live and replaces it with the final message', () => {
+    const v = newView('s');
+    applyDelta(v, 'Hel');
+    applyDelta(v, 'lo');
+    expect(v.streaming).toBe('Hello');
+    feed(v, { k: 'assistant_text', text: 'Hello world' });
+    expect(v.streaming).toBe('');
+    expect(v.items.at(-1)).toMatchObject({ kind: 'agent', text: 'Hello world' });
+    applyDelta(v, 'x');
+    feed(v, { k: 'turn_done', isError: false });
+    expect(v.streaming).toBe('');
+  });
+
+  it('adds up the cost of each turn', () => {
+    const v = feed(
+      newView('s'),
+      { k: 'turn_done', costUsd: 0.01, isError: false },
+      { k: 'turn_done', costUsd: 0.025, isError: false },
+      { k: 'turn_done', isError: false },
+    );
+    expect(v.costUsd).toBeCloseTo(0.035);
   });
 });

@@ -7,7 +7,8 @@ import type {
 } from '@antlings/shared';
 import type { AntState } from '../ants/draw.js';
 import { ApiError, del, get, isStepUp, patch, post, setCsrf, setUnauthorizedHandler } from './api.js';
-import { applyEvent, newView, type SessionView } from './model.js';
+import { applyDelta, applyEvent, newView, type SessionView } from './model.js';
+import { saveLast } from './options.js';
 import { Socket, type SocketStatus } from './socket.js';
 
 export interface ModelDto {
@@ -28,6 +29,25 @@ const NAMES = ['Mia', 'Dev', 'Sam', 'Ana', 'Raj', 'Lee', 'Zed', 'Kai', 'Zoe', 'I
 const hash = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 export const nameOf = (id: string): string => NAMES[hash(id) % NAMES.length]!;
 export const lookOf = (id: string): number => hash(id) % 6;
+
+/** A session with no message yet is called "New session". The folder name says more. */
+export function titleOf(s: SessionSummary): string {
+  if (s.title && s.title !== 'New session') return s.title;
+  const base = s.cwd.split('/').filter(Boolean).pop();
+  return base ? `New session in ${base}` : 'New session in ~';
+}
+
+export interface StatusDto {
+  version: string;
+  uptimeSec: number;
+  serviceMemoryMb: number;
+  hostMemory: { freeMb: number; totalMb: number };
+  sessions: { running: number; max: number };
+  database: { sizeMb: number; events: number };
+  lastSignin: { at: number; ip: string | null } | null;
+  pushDevices: number;
+  eventKeep: number;
+}
 
 export type Screen = 'boot' | 'login' | 'firstrun' | 'app';
 
@@ -51,6 +71,9 @@ class AppStore {
   loadError = $state('');
 
   private removed = new Set<string>();
+  /** lastSeq at the moment a session was (re)subscribed. Used to say how many events a reconnect caught up. */
+  private resyncFrom: Record<string, number> = {};
+  search = $state('');
 
   private socket = new Socket({
     onMessage: (m) => this.onMessage(m),
@@ -186,6 +209,7 @@ class AppStore {
     if (!this.views[id]) this.views[id] = newView(id);
     const v = this.views[id]!;
     v.synced = false; // replayed state changes after a reconnect are not announced again
+    this.resyncFrom[id] = v.lastSeq;
     if (this.socket.status === 'open') this.socket.hello(id, v.lastSeq);
   }
 
@@ -217,9 +241,20 @@ class AppStore {
       } else this.banner = m.message;
       return;
     }
+    if (m.t === 'delta') {
+      const v = this.views[m.sessionId];
+      if (v) applyDelta(v, m.text);
+      return;
+    }
     if (m.t === 'synced') {
       const v = this.views[m.sessionId];
-      if (v) v.synced = true;
+      if (v) {
+        v.synced = true;
+        const from = this.resyncFrom[m.sessionId] ?? 0;
+        const n = v.lastSeq - from;
+        if (from > 0 && n > 0 && m.sessionId === this.activeId)
+          this.say(`Reconnected. Caught up on ${n} missed ${n === 1 ? 'event' : 'events'}.`);
+      }
       return;
     }
     if (this.removed.has(m.sessionId)) return;
@@ -288,6 +323,7 @@ class AppStore {
         : 'A session in your home folder can reach everything in it.';
     const r = await this.withStepUp(reason, () => post<{ id: string }>('/api/sessions', o));
     if (!r) return undefined;
+    saveLast({ folder: o.folder, model: o.model, effort: o.effort ?? '', mode: o.mode });
     await this.refreshSessions();
     this.listView = 'active';
     await this.openSession(r.id);
@@ -331,6 +367,26 @@ class AppStore {
     )
       return false;
     return this.tell({ t: 'setPermissionMode', sessionId: this.activeId, mode });
+  }
+
+  async pin(id: string, pinned: boolean): Promise<void> {
+    await patch(`/api/sessions/${id}`, { pinned });
+    await this.refreshSessions();
+  }
+
+  /** Other sessions that are waiting for the owner right now, so an approval is never hidden behind another session. */
+  get waitingElsewhere(): { id: string; title: string }[] {
+    return this.sessions
+      .filter((s) => s.id !== this.activeId && this.views[s.id]?.state === 'approval')
+      .map((s) => ({ id: s.id, title: titleOf(s) }));
+  }
+
+  status(): Promise<StatusDto> {
+    return get<StatusDto>('/api/status');
+  }
+
+  testPush(): Promise<{ sent: number }> {
+    return post<{ sent: number }>('/api/push/test');
   }
 
   async archive(id: string, archived: boolean): Promise<void> {

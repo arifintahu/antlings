@@ -27,3 +27,8 @@ tags: [antlings, decisions]
 | 2026-10-12 | Service and agent stay one Unix user in v0.1 | ADR 0003 and spec ask for user `antlings`. The risk is listed in ADR 0002 and the handoff |
 | 2026-10-12 | Installer puts the Caddy file in `conf.d` when the main Caddyfile already imports `/etc/caddy/conf.d/*.caddy` | No edit of the main Caddyfile needed. Found on the VPS during the test deploy |
 | 2026-10-12 | `--skip-dns-check` used for the test deploy | The VPS interface has a private address (NAT), the DNS check compares with interface addresses |
+| 2026-10-12 | Text deltas are sent live and not stored in the event log | Thousands of rows per answer otherwise. The final message replaces the live text, so a reconnect loses nothing |
+| 2026-10-12 | The approval is shown inside the tool card of the same call | One card instead of two. The server now logs the tool call before its approval request (a queued message could be overtaken) |
+| 2026-10-12 | Markdown is parsed to a data tree and rendered as text nodes | No `{@html}`, so model output cannot inject markup. Only http, https and mailto links |
+| 2026-10-12 | Pins live in Antlings' own table, not in a Claude session tag | `tagSession` holds one tag, and it is used for archive |
+| 2026-10-12 | Memory settings (session limit, idle close) left to the owner | Owner decision |

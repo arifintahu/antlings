@@ -61,7 +61,8 @@
 
 <dialog bind:this={dlg} aria-labelledby="step-h" onclose={() => app.stepUpAsk && finish(false)}>
   <h2 id="step-h">Confirm it's you</h2>
-  <p class="muted">{app.stepUpAsk?.reason ?? ''}</p>
+  <p>{app.stepUpAsk?.reason ?? ''}</p>
+  <p class="muted why">Antlings asks again for risky actions: Bypass mode, a session in your home folder, deleting a session, and changes to how you sign in. A stolen browser session cannot do these without your passkey or code.</p>
   <button class="btn primary wide" type="button" onclick={usePasskey} disabled={busy}>
     {busy ? 'Waiting for your device…' : 'Use passkey'}
   </button>

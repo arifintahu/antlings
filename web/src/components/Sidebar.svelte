@@ -1,18 +1,40 @@
 <script lang="ts">
+  import type { SessionSummary } from '@antlings/shared';
   import { fmtReset, level } from '../lib/model.js';
-  import { app, lookOf, nameOf } from '../lib/store.svelte.js';
+  import { showPath } from '../lib/options.js';
+  import { app, lookOf, nameOf, titleOf } from '../lib/store.svelte.js';
   import Ant from './Ant.svelte';
   import Chip from './Chip.svelte';
 
-  let { open, inert, onnew, onclose, onsecurity }: { open: boolean; inert: boolean; onnew: () => void; onclose: () => void; onsecurity: () => void } =
-    $props();
+  let {
+    open,
+    inert,
+    onnew,
+    onclose,
+    onsecurity,
+  }: { open: boolean; inert: boolean; onnew: () => void; onclose: () => void; onsecurity: () => void } = $props();
 
   const archivedView = $derived(app.listView === 'archived');
-  const visible = $derived(app.sessions.filter((s) => s.archived === archivedView));
   const nActive = $derived(app.sessions.filter((s) => !s.archived).length);
   const nArchived = $derived(app.sessions.length - nActive);
 
-  const base = (p: string) => p.split('/').filter(Boolean).pop() ?? '~';
+  const visible = $derived.by(() => {
+    const q = app.search.trim().toLowerCase();
+    return app.sessions.filter(
+      (s) => s.archived === archivedView && (!q || titleOf(s).toLowerCase().includes(q) || s.cwd.toLowerCase().includes(q)),
+    );
+  });
+  const pinned = $derived(visible.filter((s) => s.pinned));
+  /** Sessions grouped by project folder. The group with the newest session comes first. */
+  const groups = $derived.by(() => {
+    const by = new Map<string, SessionSummary[]>();
+    for (const s of visible.filter((x) => !x.pinned)) {
+      const list = by.get(s.cwd) ?? [];
+      list.push(s);
+      by.set(s.cwd, list);
+    }
+    return [...by.entries()].sort((a, b) => Math.max(...b[1].map((s) => s.lastModified)) - Math.max(...a[1].map((s) => s.lastModified)));
+  });
 
   const rows = $derived.by(() => {
     const p = app.plan;
@@ -29,6 +51,33 @@
   }
 </script>
 
+{#snippet row(s: SessionSummary)}
+  {@const st = app.stateOf(s.id)}
+  {@const ctx = app.views[s.id]?.context?.percentage ?? 0}
+  <div class="rowwrap">
+    <button type="button" class="row" aria-current={s.id === app.activeId} onclick={() => pick(s.id)}>
+      <Ant state={st} look={lookOf(s.id)} lead animated={false} />
+      <span class="d">
+        <span class="t">{titleOf(s)}</span>
+        <span class="meta">
+          <Chip state={st} />
+          {#if ctx >= 70}<span class="s-approval">ctx {Math.round(ctx)}%</span>{/if}
+        </span>
+      </span>
+      <span class="sr">{nameOf(s.id)}, {showPath(s.cwd)}</span>
+    </button>
+    <button
+      type="button"
+      class="iconbtn pinbtn"
+      aria-pressed={s.pinned}
+      aria-label={s.pinned ? `Unpin ${titleOf(s)}` : `Pin ${titleOf(s)}`}
+      onclick={() => app.pin(s.id, !s.pinned)}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" class:on={s.pinned}><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v5" /></svg>
+    </button>
+  </div>
+{/snippet}
+
 <aside class="sidebar" class:open id="sidebar" aria-label="Sessions" {inert}>
   <div class="side-head">
     <h2>Antlings</h2>
@@ -42,24 +91,26 @@
       <button type="button" role="tab" aria-selected={archivedView} onclick={() => (app.listView = 'archived')}>Archived {nArchived}</button>
     </div>
   </div>
+  {#if app.sessions.length > 3}
+    <div class="searchrow">
+      <label class="sr" for="session-search">Search sessions</label>
+      <input id="session-search" type="search" placeholder="Search sessions" autocomplete="off" bind:value={app.search} />
+    </div>
+  {/if}
   <div class="sessions">
-    {#each visible as s (s.id)}
-      {@const st = app.stateOf(s.id)}
-      {@const ctx = app.views[s.id]?.context?.percentage ?? 0}
-      <button type="button" class="row" aria-current={s.id === app.activeId} onclick={() => pick(s.id)}>
-        <Ant state={st} look={lookOf(s.id)} lead animated={false} />
-        <span class="d">
-          <span class="t">{s.title}</span>
-          <span class="meta">
-            <Chip state={st} />
-            <span class="n">{base(s.cwd)}</span>
-            {#if ctx >= 70}<span class="s-approval">ctx {Math.round(ctx)}%</span>{/if}
-          </span>
-        </span>
-        <span class="sr">{nameOf(s.id)}</span>
-      </button>
+    {#if pinned.length}
+      <div class="grp">Pinned</div>
+      {#each pinned as s (s.id)}{@render row(s)}{/each}
+    {/if}
+    {#each groups as [cwd, list] (cwd)}
+      <div class="grp">{showPath(cwd)}</div>
+      {#each list as s (s.id)}{@render row(s)}{/each}
     {:else}
-      <div class="muted sidebar-empty">{archivedView ? 'Nothing archived.' : 'No sessions yet. Press New.'}</div>
+      {#if !pinned.length}
+        <div class="muted sidebar-empty">
+          {app.search ? 'No session matches.' : archivedView ? 'Nothing archived.' : 'No sessions yet. Press New.'}
+        </div>
+      {/if}
     {/each}
   </div>
   <div class="side-foot">
@@ -72,7 +123,7 @@
           <span class="lr">{fmtReset(r.w.resetsAt, app.now)}</span>
         </div>
       {:else}
-        <div class="muted">Plan usage unavailable</div>
+        <div class="muted">Plan usage shows after your first message.</div>
       {/each}
     </section>
     <div class="foot-links">

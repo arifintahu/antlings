@@ -87,6 +87,8 @@ export type ServerMessage =
   | { t: 'event'; sessionId: string; seq: number; at: number; event: UiEvent }
   | { t: 'synced'; sessionId: string; lastSeq: number }
   | { t: 'ping' }
+  /** Live text of the lead's answer while it is being written. Not stored: the final assistant_text event replaces it. */
+  | { t: 'delta'; sessionId: string; text: string }
   | { t: 'error'; code: string; message: string };
 
 export interface SessionSummary {
@@ -96,5 +98,6 @@ export interface SessionSummary {
   model?: string;
   lastModified: number;
   archived: boolean;
+  pinned: boolean;
   running: boolean;
 }

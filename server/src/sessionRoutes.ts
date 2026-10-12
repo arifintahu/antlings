@@ -19,6 +19,7 @@ const NewSessionBody = z.object({
 const PatchBody = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   archived: z.boolean().optional(),
+  pinned: z.boolean().optional(),
 });
 const CreateFolderBody = z.object({ parent: z.string().max(1024), name: z.string().max(200) });
 
@@ -60,6 +61,7 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
     model: mgr.meta(i.sessionId)?.model,
     lastModified: i.lastModified,
     archived: i.tag === 'archived',
+    pinned: mgr.isPinned(i.sessionId),
     running: mgr.isRunning(i.sessionId),
   });
 
@@ -117,7 +119,7 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
         .filter((i) => i.cwd && folders.relative(i.cwd) !== null)
         .map(summary)
         .filter((s) => s.archived === wantArchived)
-        .sort((a, b) => b.lastModified - a.lastModified),
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.lastModified - a.lastModified),
     };
   });
 
@@ -165,6 +167,7 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
     const b = body(PatchBody, req, reply);
     if (!b) return;
     if (b.title !== undefined) await transcripts.rename(info.sessionId, b.title);
+    if (b.pinned !== undefined) mgr.setPinned(info.sessionId, b.pinned);
     if (b.archived !== undefined) {
       await transcripts.tag(info.sessionId, b.archived ? 'archived' : null);
       if (b.archived) mgr.close(info.sessionId);

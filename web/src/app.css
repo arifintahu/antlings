@@ -26,7 +26,7 @@
     --accent: #166534;
     --accent-d: #14532d;
     --on-accent: #ffffff;
-    --amber: #b45309;
+    --amber: #92400e;
     --red: #b91c1c;
     --blue: #0369a1;
   }
@@ -343,7 +343,7 @@ textarea:disabled {
   background: var(--accent);
 }
 .bar.warn i {
-  background: var(--amber);
+  background: #f59e0b;
 }
 .bar.crit i {
   background: var(--red);
@@ -1207,7 +1207,7 @@ dialog input {
   right: 0;
   top: 0;
   padding: calc(6px + env(safe-area-inset-top)) 12px 6px;
-  background: var(--amber);
+  background: #f59e0b;
   color: #000;
   text-align: center;
   display: flex;
@@ -1338,4 +1338,219 @@ textarea.wide-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* ── v0.1.1 additions ── */
+.md p {
+  margin: 0 0 8px;
+}
+.md p:last-child {
+  margin-bottom: 0;
+}
+.md .mdh {
+  font-size: 22px;
+  margin: 6px 0;
+}
+.md .mdh1 {
+  font-size: 26px;
+}
+.md ul,
+.md ol {
+  margin: 0 0 8px;
+  padding-left: 26px;
+}
+.md blockquote {
+  margin: 0 0 8px;
+  padding: 2px 10px;
+  border-left: 4px solid var(--border);
+  color: var(--muted);
+}
+.md code {
+  background: var(--surface2);
+  padding: 0 4px;
+  font-size: 0.95em;
+}
+.md pre.mdcode {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  font: inherit;
+  font-size: 18px;
+  white-space: pre;
+}
+.md pre.mdcode code {
+  background: none;
+  padding: 0;
+}
+.md a {
+  color: var(--blue);
+  overflow-wrap: anywhere;
+}
+.msg.agent {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.msg.streaming .caret::after {
+  content: '_';
+}
+.prev-sum {
+  padding: 6px 10px 2px;
+}
+.prev-body {
+  margin: 0;
+  padding: 4px 0 8px;
+  font: inherit;
+  font-size: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+}
+.pl {
+  display: block;
+  padding: 0 10px;
+}
+.pl.add {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.pl.del {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+}
+.pl .sign {
+  display: inline-block;
+  width: 1.2em;
+  font-style: normal;
+  color: var(--muted);
+}
+.prev-more {
+  padding: 0 10px 6px;
+  font-size: 17px;
+}
+.toolcard .result {
+  border-top: 2px solid var(--line);
+  color: var(--muted);
+  max-height: 200px;
+  overflow: auto;
+}
+.grp {
+  padding: 8px 6px 2px;
+  color: var(--muted);
+  font-size: 17px;
+}
+.rowwrap {
+  display: flex;
+  align-items: center;
+}
+.rowwrap .row {
+  flex: 1;
+  min-width: 0;
+}
+.pinbtn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.pinbtn svg.on {
+  fill: var(--amber);
+  stroke: var(--amber);
+}
+.pinbtn {
+  color: var(--muted);
+}
+.searchrow {
+  padding: 4px 12px 0;
+}
+.searchrow input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 19px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 0;
+}
+.titlebtn {
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  min-height: 44px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+.titlebtn:hover {
+  background: var(--surface2);
+}
+.renameinput {
+  width: min(100%, 420px);
+  min-height: 40px;
+  font: inherit;
+  font-size: 20px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  padding: 0 8px;
+  border-radius: 0;
+}
+.topbar h1 small {
+  margin-left: 8px;
+}
+.modebtn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  white-space: nowrap;
+}
+.modebtn:hover {
+  background: var(--surface2);
+}
+.modebtn .warn-mode {
+  color: var(--amber);
+}
+@media (max-width: 599px) {
+  .modebtn .muted {
+    display: none;
+  }
+}
+.waitbar {
+  background: var(--amber);
+  color: #000;
+}
+.waitbar button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+.howto {
+  padding: 8px 10px;
+  max-width: 70ch;
+}
+.howto p {
+  margin: 0 0 8px;
+}
+.why {
+  font-size: 17px;
+  margin-top: 8px;
+}
+.modebtn {
+  min-width: 44px;
 }

@@ -21,6 +21,14 @@ Everything here runs on the VPS as a sudo-capable user. Replace `$VPS_HOST` with
 | Sessions and projects | `/home/antlings` (the folder picker's root; Claude transcripts are in `~/.claude`) |
 | Backups made by the installer | `/var/backups/antlings-<date>/` |
 
+## One-command deploy
+
+```bash
+VPS_SSH=ubuntu@your-host DOMAIN=ants.example.com ./deploy/deploy.sh --skip-dns-check
+```
+
+It builds the release in Docker, copies it to `/root/antlings-release` on the server, runs `install.sh` there (checksum, link check, health check, rollback) and then checks `https://$DOMAIN/health`. The address stays in your shell, not in the repository. The steps below do the same by hand.
+
 ## Build and install a release
 
 On your own machine (needs Docker, runs nothing on the VPS):
@@ -144,6 +152,7 @@ Edit `/etc/antlings/antlings.env`, then `sudo systemctl restart antlings`. Runni
 | `ANTLINGS_IDLE_HOURS` | Sign-in idle timeout (also on the Security page) | 12 |
 | `ANTLINGS_AUTH_MODE` | `apikey`, or `subscription` with `ANTLINGS_SUBSCRIPTION_OK=1`. Read [[0003-claude-login-terms]] first. | `apikey` |
 | `ANTLINGS_HOME` | Root of the folder picker | `/home/antlings` |
+| `ANTLINGS_EVENT_KEEP` | Newest events kept per session in the log. Older ones stay in the Claude transcript. | 20000 |
 
 The memory limit is `MemoryHigh=800M` in `/etc/systemd/system/antlings.service`. Change it with `sudo systemctl edit antlings`, not by editing the installed file.
 

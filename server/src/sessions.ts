@@ -9,6 +9,17 @@ import { fetchPlanUsage } from './plan.js';
 import type { Transcripts } from './transcripts.js';
 import { randomToken, type Clock } from './util.js';
 
+/** The text of a streamed token from the lead (not from a subagent), or ''. */
+export function leadTextDelta(m: unknown): string {
+  const x = (m ?? {}) as {
+    parent_tool_use_id?: string | null;
+    event?: { type?: string; delta?: { type?: string; text?: string } };
+  };
+  if (x.parent_tool_use_id) return '';
+  const d = x.event?.type === 'content_block_delta' ? x.event.delta : undefined;
+  return d?.type === 'text_delta' && typeof d.text === 'string' ? d.text : '';
+}
+
 export class LimitError extends Error {
   constructor(max: number) {
     super(`Only ${max} sessions can run at once on this server. Close or finish one first.`);
@@ -118,6 +129,33 @@ export class SessionManager {
       .run(id, seq, at, JSON.stringify(event));
     for (const l of this.listeners.get(id) ?? []) l({ t: 'event', sessionId: id, seq, at, event });
     return { seq, at, event };
+  }
+
+  /** Sends a message that is not stored (live text deltas). */
+  private broadcast(id: string, m: ServerMessage): void {
+    for (const l of this.listeners.get(id) ?? []) l(m);
+  }
+
+  /** Keeps the newest `eventKeep` events of a session. Older ones remain in the Claude transcript. */
+  pruneEvents(id: string): number {
+    const head = this.nextSeq(id) - 1;
+    this.seqCache.set(id, head); // nextSeq advanced the counter; put it back
+    const cut = head - this.d.config.eventKeep;
+    if (cut <= 0) return 0;
+    return this.d.db.prepare('DELETE FROM event_log WHERE session_id = ? AND seq <= ?').run(id, cut).changes;
+  }
+
+  isPinned(id: string): boolean {
+    return !!this.d.db.prepare('SELECT 1 FROM session_pins WHERE id = ?').get(id);
+  }
+  pinnedIds(): Set<string> {
+    return new Set(
+      (this.d.db.prepare('SELECT id FROM session_pins').all() as { id: string }[]).map((r) => r.id),
+    );
+  }
+  setPinned(id: string, pinned: boolean): void {
+    if (pinned) this.d.db.prepare('INSERT OR IGNORE INTO session_pins (id) VALUES (?)').run(id);
+    else this.d.db.prepare('DELETE FROM session_pins WHERE id = ?').run(id);
   }
 
   eventsAfter(id: string, lastSeq: number, limit = 5000): StoredEvent[] {
@@ -326,6 +364,11 @@ export class SessionManager {
     try {
       for await (const m of a.handle.messages) {
         a.lastActivity = this.d.clock.now();
+        if (m.type === 'stream_event') {
+          const text = leadTextDelta(m);
+          if (text) this.broadcast(a.id, { t: 'delta', sessionId: a.id, text });
+          continue;
+        }
         for (const ev of a.mapper.map(m)) this.emit(a.id, ev);
         if (a.mapper.plan !== this.plan) this.plan = a.mapper.plan;
         if (m.type === 'result') {
@@ -357,12 +400,16 @@ export class SessionManager {
     this.plan = usage;
     a.mapper.plan = usage;
     this.emit(a.id, { k: 'plan_usage', usage });
+    this.pruneEvents(a.id);
     this.d.notifier?.sessionFinished(a.id);
   }
 
   private canUseTool(a: Active): CanUseTool {
-    return (toolName, input, opts) =>
-      new Promise((resolve) => {
+    return async (toolName, input, opts) => {
+      // The assistant message that holds this tool call may still be queued in the message loop. Let it be
+      // logged first, so the log reads tool call, then approval, and the "waiting" state is not overwritten.
+      await new Promise<void>((r) => setImmediate(r));
+      return new Promise((resolve) => {
         const requestId = randomToken(9);
         a.pending.set(requestId, { resolve, toolName, input });
         this.emit(a.id, {
@@ -384,6 +431,7 @@ export class SessionManager {
           },
         );
       });
+    };
   }
 
   private settle(
@@ -521,6 +569,7 @@ export class SessionManager {
     await this.d.transcripts.remove(id).catch(() => undefined); // no transcript yet is fine
     this.d.db.prepare('DELETE FROM event_log WHERE session_id = ?').run(id);
     this.d.db.prepare('DELETE FROM session_meta WHERE id = ?').run(id);
+    this.d.db.prepare('DELETE FROM session_pins WHERE id = ?').run(id);
     this.seqCache.delete(id);
     this.d.audit('session_deleted', { id });
   }

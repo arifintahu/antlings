@@ -2,8 +2,8 @@
   import { onMount, tick } from 'svelte';
   import { STATE_LABEL } from '../ants/draw.js';
   import { counts, fmtK, isBusy, level } from '../lib/model.js';
-  import { showPath } from '../lib/options.js';
-  import { app } from '../lib/store.svelte.js';
+  import { MODES, prettyModel, showPath } from '../lib/options.js';
+  import { app, titleOf } from '../lib/store.svelte.js';
   import AgentDetail from './AgentDetail.svelte';
   import Conversation from './Conversation.svelte';
   import NewSession from './NewSession.svelte';
@@ -23,6 +23,11 @@
   let chatEl: HTMLElement | undefined = $state();
   let delDlg: HTMLDialogElement;
   let desktop = $state(false);
+  /** After the reader sends a message, keep the newest text in view until the answer is done or they scroll up. */
+  let follow = false;
+  let renaming = $state(false);
+  let renameText = $state('');
+  let renameEl: HTMLInputElement | undefined = $state();
 
   onMount(() => {
     const mq = window.matchMedia('(min-width: 900px)');
@@ -51,7 +56,9 @@
       : app.wsStatus !== 'open'
         ? 'Offline. Reconnecting…'
         : !ant
-          ? 'Ask the agent…'
+          ? desktop
+            ? 'Ask the agent… (Enter sends, Shift+Enter adds a line)'
+            : 'Ask the agent…'
           : busyAnt
             ? `${ant.subagentType} is working…`
             : `Follow up with ${ant.subagentType} (the lead resumes it)…`,
@@ -60,11 +67,13 @@
   // Keep the newest message in view unless the reader scrolled up.
   $effect(() => {
     void view?.lastSeq;
+    void view?.streaming; // follow the answer while it is written
     void app.focus;
     const el = chatEl;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (near) void tick().then(() => (el.scrollTop = el.scrollHeight));
+    if (near || follow) void tick().then(() => (el.scrollTop = el.scrollHeight));
+    if (view && !view.turnRunning) follow = false; // the turn is over; stop following
   });
 
   $effect(() => {
@@ -82,6 +91,8 @@
     );
     if (!sent) return; // keep the text so it is not lost
     prompt = '';
+    follow = true;
+    void tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight));
     if (ant) app.focus = 'lead';
   }
 
@@ -93,6 +104,19 @@
   }
 
   function esc(ev: KeyboardEvent) {
+    if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !document.querySelector('dialog[open]')) {
+      const ids = app.sessions.filter((s) => s.archived === (app.listView === 'archived')).map((s) => s.id);
+      if (ev.key === 'n' || ev.key === 'N') {
+        ev.preventDefault();
+        newOpen = true;
+      } else if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && ids.length) {
+        ev.preventDefault();
+        const i = ids.indexOf(app.activeId ?? '');
+        const next = ids[(i + (ev.key === 'ArrowDown' ? 1 : -1) + ids.length) % ids.length]!;
+        void app.openSession(next);
+      }
+      return;
+    }
     if (ev.key !== 'Escape') return;
     drawer = false;
     menuOpen = false;
@@ -120,6 +144,28 @@
       app.banner = 'The session could not be deleted.';
     } finally {
       deleting = false;
+    }
+  }
+
+  const modeLabel = $derived(MODES.find(([m]) => m === view?.mode)?.[1] ?? 'Ask');
+  const modelLabel = $derived(app.models.find((m) => m.value === view?.model)?.displayName ?? prettyModel(view?.model ?? ''));
+  const cost = $derived(view && view.costUsd > 0 ? `$${view.costUsd < 0.01 ? view.costUsd.toFixed(4) : view.costUsd.toFixed(2)}` : '');
+
+  function startRename() {
+    if (!summary) return;
+    renameText = titleOf(summary);
+    renaming = true;
+    void tick().then(() => renameEl?.select());
+  }
+  async function finishRename(save: boolean) {
+    const t = renameText.trim();
+    renaming = false;
+    if (save && t && app.activeId && t !== summary?.title) {
+      try {
+        await app.rename(app.activeId, t);
+      } catch {
+        app.banner = 'The session could not be renamed.';
+      }
     }
   }
 
@@ -154,9 +200,34 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
       </button>
       <h1>
-        {#if summary}{summary.title} <small title={showPath(summary.cwd)}>{showPath(summary.cwd)}</small>{:else}Antlings{/if}
+        {#if summary && renaming}
+          <input
+            class="renameinput"
+            aria-label="Session name"
+            bind:this={renameEl}
+            bind:value={renameText}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') void finishRename(true);
+              else if (e.key === 'Escape') {
+                e.stopPropagation();
+                void finishRename(false);
+              }
+            }}
+            onblur={() => renaming && void finishRename(true)}
+          />
+        {:else if summary}
+          <button class="titlebtn" type="button" aria-label="Rename {titleOf(summary)}" onclick={startRename}>{titleOf(summary)}</button>
+          <small title={showPath(summary.cwd)}>{showPath(summary.cwd)}</small>
+        {:else}Antlings{/if}
       </h1>
       {#if view}
+        <button
+          class="modebtn"
+          type="button"
+          aria-label="Model and mode: {modelLabel}, {modeLabel}. Open settings"
+          onclick={() => (settingsOpen = true)}
+          ><span class:warn-mode={view.mode === 'bypassPermissions'}>{modeLabel}</span><span class="muted"> · {modelLabel}</span></button
+        >
         <button class="ctxbtn" id="ctxbtn" type="button" aria-expanded={ctxOpen} aria-controls="ctxpanel"
           aria-label="Context window: {ctxPct} percent used"
           onclick={() => (ctxOpen = !ctxOpen)}>
@@ -173,6 +244,12 @@
         </button>
       {/if}
     </header>
+
+    {#each app.waitingElsewhere as w (w.id)}
+      <div class="waitbar" role="status">
+        <button type="button" onclick={() => app.openSession(w.id)}>“{w.title}” is waiting for your approval. Open it →</button>
+      </div>
+    {/each}
 
     {#if view && menuOpen}
       <div class="menu" id="sessmenu">
@@ -191,13 +268,14 @@
         <div class="stack"><i class="fill" style:width="{ctxPct}%"></i></div>
         {#if ctxPct >= 80}<div class="muted">Close to the limit. Claude compacts automatically soon.</div>{/if}
         {#if !view.context}<div class="muted">Updated after each turn.</div>{/if}
+        {#if cost}<div class="muted">Cost of this session so far: {cost}</div>{/if}
         <div class="acts"><button class="btn" type="button" disabled={archived || composerOff} onclick={() => (app.send('/compact'), (ctxOpen = false))}>Compact</button></div>
       </div>
     {/if}
 
     {#if view}
       <Office {view} />
-      <main class="chat" id="chat" bind:this={chatEl} aria-label={ant ? `Subagent ${ant.subagentType}` : 'Conversation'} tabindex="-1">
+      <main class="chat" id="chat" bind:this={chatEl} aria-label={ant ? `Subagent ${ant.subagentType}` : 'Conversation'} tabindex="-1" onscroll={() => { if (chatEl && chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 200) follow = false; }}>
         {#if ant}<AgentDetail {ant} />{:else}<Conversation {view} {archived} />{/if}
         {#if !ant && view.items.length === 0}
           <div class="card"><div class="hd"><span>{STATE_LABEL[view.state]}</span></div><pre>New session. What should we work on?</pre></div>
@@ -216,6 +294,14 @@
           <div class="hd"><span>No session open</span></div>
           <pre>Pick a session on the left, or start a new one.</pre>
           <div class="acts"><button class="btn primary" type="button" onclick={() => (newOpen = true)}>New session</button></div>
+        </div>
+        <div class="card">
+          <div class="hd"><span>How it works</span></div>
+          <div class="howto">
+            <p><b>Ask</b> asks before it edits files or runs commands. <b>Accept edits</b> edits without asking. <b>Plan</b> explores and writes a plan, no edits. <b>Bypass</b> runs everything, and needs your passkey first.</p>
+            <p>Start in a folder for one project, for example <code>~/my-app</code>. A session in your home folder reaches everything in it, so Antlings checks your passkey first.</p>
+            <p>Each subagent shows up as a worker ant. Tap one to see what it did. Approvals can reach your phone if you turn on notifications on the Security page.</p>
+          </div>
         </div>
       </main>
     {/if}

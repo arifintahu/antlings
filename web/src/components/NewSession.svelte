@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PermissionMode } from '@antlings/shared';
   import { ApiError } from '../lib/api.js';
-  import { MODES, MODE_HINT, showPath } from '../lib/options.js';
+  import { loadLast, MODES, MODE_HINT, showPath } from '../lib/options.js';
   import { app, type FolderListing } from '../lib/store.svelte.js';
 
   let { open, onclose }: { open: boolean; onclose: () => void } = $props();
@@ -15,6 +15,7 @@
   let listing = $state<FolderListing | null>(null);
   let mk = $state(false);
   let newName = $state('');
+  let nameEl: HTMLInputElement | undefined = $state();
   let err = $state('');
   let busy = $state(false);
 
@@ -27,10 +28,16 @@
     if (open && !dlg.open) {
       view = 'form';
       err = '';
-      folder = app.activeSummary?.cwd || app.sessions.find((s) => s.cwd)?.cwd || '';
-      model = app.models.find((m) => m.value === 'sonnet')?.value ?? app.models[0]?.value ?? 'default';
-      effort = '';
-      mode = 'default';
+      // Start from what was used last time. Bypass is never preselected.
+      const last = loadLast();
+      folder = last?.folder ?? (app.activeSummary?.cwd || app.sessions.find((s) => s.cwd)?.cwd || '');
+      model =
+        app.models.find((m) => m.value === last?.model)?.value ??
+        app.models.find((m) => m.value === 'sonnet')?.value ??
+        app.models[0]?.value ??
+        'default';
+      effort = last?.effort ?? '';
+      mode = last && last.mode !== 'bypassPermissions' ? last.mode : 'default';
       dlg.showModal();
     } else if (!open && dlg.open) dlg.close();
   });
@@ -38,6 +45,11 @@
   $effect(() => {
     if (current && !current.supportsEffort) effort = '';
     else if (current && effort && !current.effortLevels.includes(effort)) effort = '';
+  });
+
+  // The name field gets focus as soon as it appears.
+  $effect(() => {
+    if (mk && nameEl) nameEl.focus();
   });
 
   async function browse(path: string) {
@@ -100,7 +112,19 @@
     {#if mk}
       <div class="mkrow">
         <label class="sr" for="nd-name">Folder name</label>
-        <input id="nd-name" placeholder="folder name" autocomplete="off" bind:value={newName} />
+        <input
+          id="nd-name"
+          placeholder="folder name"
+          autocomplete="off"
+          bind:this={nameEl}
+          bind:value={newName}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void createFolder();
+            }
+          }}
+        />
         <button type="button" class="btn" onclick={createFolder}>Create</button>
       </div>
     {/if}
