@@ -72,6 +72,8 @@ export function securityHeaders(origin: string): Record<string, string> {
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Resource-Policy': 'same-origin',
     'X-Frame-Options': 'DENY',
+    // Caddy also sets HSTS. Setting it here covers a direct hit on the service behind another proxy.
+    ...(origin.startsWith('https:') ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}),
   };
 }
 
