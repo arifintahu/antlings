@@ -130,7 +130,14 @@ export class SessionManager {
    * The replay and the listener registration happen in one tick, so nothing is missed or doubled.
    */
   subscribe(id: string, lastSeq: number, send: Listener): () => void {
-    const replay = this.eventsAfter(id, lastSeq);
+    // Page through the whole backlog so a client far behind still gets every event.
+    const replay: StoredEvent[] = [];
+    for (let from = lastSeq; ;) {
+      const page = this.eventsAfter(id, from, 2000);
+      replay.push(...page);
+      if (page.length < 2000) break;
+      from = page[page.length - 1]!.seq;
+    }
     for (const e of replay) send({ t: 'event', sessionId: id, seq: e.seq, at: e.at, event: e.event });
     const last = replay.at(-1)?.seq ?? lastSeq;
     send({ t: 'synced', sessionId: id, lastSeq: last });

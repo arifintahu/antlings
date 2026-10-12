@@ -36,10 +36,10 @@ self.addEventListener('fetch', (event) => {
       }
       try {
         const res = await fetch(req);
-        if (res.ok) cache.put(req, res.clone());
+        if (res.ok) event.waitUntil(cache.put(req, res.clone()));
         return res;
       } catch (e) {
-        const hit = (await cache.match(req)) || (await cache.match('/'));
+        const hit = (await cache.match(req)) || (req.mode === 'navigate' ? await cache.match('/') : undefined);
         if (hit) return hit;
         throw e;
       }

@@ -8,7 +8,10 @@ afterEach(async () => {
   await kit?.app.close();
 });
 
-const SUB = { endpoint: 'https://push.example/abc', keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) } };
+const SUB = {
+  endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+  keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) },
+};
 const until = async (pred: () => boolean, ms = 2000) => {
   const t = Date.now();
   while (!pred()) {
@@ -48,8 +51,10 @@ describe('push routes', () => {
     await setup();
     for (const payload of [
       {},
-      { ...SUB, endpoint: 'http://push.example/x' },
+      { ...SUB, endpoint: 'http://fcm.googleapis.com/x' },
       { ...SUB, keys: {} },
+      { ...SUB, endpoint: 'https://evil.example/x' },
+      { ...SUB, keys: { p256dh: 'a b', auth: 'x' } },
       { ...SUB, endpoint: 'x'.repeat(3000) },
     ]) {
       expect(

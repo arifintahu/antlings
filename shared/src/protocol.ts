@@ -86,6 +86,7 @@ export interface StoredEvent {
 export type ServerMessage =
   | { t: 'event'; sessionId: string; seq: number; at: number; event: UiEvent }
   | { t: 'synced'; sessionId: string; lastSeq: number }
+  | { t: 'ping' }
   | { t: 'error'; code: string; message: string };
 
 export interface SessionSummary {

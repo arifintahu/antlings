@@ -6,9 +6,30 @@ import type { Db } from './db.js';
 import type { Notifier } from './sessions.js';
 import type { Clock } from './util.js';
 
+/** Hosts of the browser push services. Anything else is refused, so the server cannot be pointed at internal hosts. */
+const PUSH_HOSTS = [
+  /(^|\.)googleapis\.com$/,
+  /(^|\.)push\.services\.mozilla\.com$/,
+  /(^|\.)push\.apple\.com$/,
+  /(^|\.)notify\.windows\.com$/,
+];
+const B64URL = /^[A-Za-z0-9_-]+={0,2}$/;
+const MAX_SUBSCRIPTIONS = 20;
+
 const Subscription = z.object({
-  endpoint: z.string().url().max(2000).startsWith('https://'),
-  keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+  endpoint: z
+    .string()
+    .url()
+    .max(2000)
+    .startsWith('https://')
+    .refine((u) => {
+      try {
+        return PUSH_HOSTS.some((re) => re.test(new URL(u).hostname));
+      } catch {
+        return false;
+      }
+    }, 'unknown push service'),
+  keys: z.object({ p256dh: z.string().max(200).regex(B64URL), auth: z.string().max(100).regex(B64URL) }),
 });
 
 export interface PushPayload {
@@ -33,12 +54,18 @@ export class PushService implements Notifier {
     return this.vapid?.publicKey ?? null;
   }
 
-  save(sub: z.infer<typeof Subscription>): void {
+  save(sub: z.infer<typeof Subscription>): boolean {
+    if (
+      this.count() >= MAX_SUBSCRIPTIONS &&
+      !this.db.prepare('SELECT 1 FROM push_subscriptions WHERE endpoint = ?').get(sub.endpoint)
+    )
+      return false;
     this.db
       .prepare(
         'INSERT INTO push_subscriptions (endpoint, data, created_at) VALUES (?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET data = excluded.data',
       )
       .run(sub.endpoint, JSON.stringify(sub), this.clock.now());
+    return true;
   }
 
   remove(endpoint: string): void {
@@ -58,7 +85,11 @@ export class PushService implements Notifier {
     await Promise.all(
       rows.map(async (r) => {
         try {
-          await this.send(JSON.parse(r.data), JSON.stringify(p), { TTL: 3600 });
+          await this.send(JSON.parse(r.data), JSON.stringify(p), {
+            TTL: 3600,
+            timeout: 10_000,
+            urgency: 'high',
+          });
         } catch (e) {
           const status = (e as { statusCode?: number }).statusCode;
           if (status === 404 || status === 410) this.remove(r.endpoint);
@@ -96,7 +127,7 @@ export function registerPushRoutes(app: FastifyInstance, push: PushService): voi
   app.post('/api/push/subscribe', async (req, reply) => {
     const r = Subscription.safeParse(req.body);
     if (!r.success) return reply.code(400).send({ error: 'bad_request' });
-    push.save(r.data);
+    if (!push.save(r.data)) return reply.code(409).send({ error: 'too_many' });
     return { ok: true };
   });
 

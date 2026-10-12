@@ -98,7 +98,10 @@
     if (busy || password.length < 12) return;
     busy = true;
     try {
-      const r = await post<{ secret: string; otpauthUrl: string }>('/api/security/fallback', { password });
+      const r = await app.withStepUp('Setting a backup password.', () =>
+        post<{ secret: string; otpauthUrl: string }>('/api/security/fallback', { password }),
+      );
+      if (!r) return;
       secret = r.secret;
       otpauth = r.otpauthUrl;
       password = '';
@@ -116,7 +119,7 @@
     if (busy || totp.length !== 6) return;
     busy = true;
     try {
-      await post('/api/security/fallback/confirm', { code: totp });
+      await app.withStepUp('Confirming your backup code.', () => post('/api/security/fallback/confirm', { code: totp }));
       step = 4;
       ant = 'done';
       msg = '';

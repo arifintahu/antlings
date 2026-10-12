@@ -6,24 +6,23 @@
   let { open, onclose }: { open: boolean; onclose: () => void } = $props();
   let dlg: HTMLDialogElement;
   let title = $state('');
-  let mode = $state<PermissionMode>('default');
 
   const view = $derived(app.active);
+  const mode = $derived((view?.mode as PermissionMode | undefined) ?? 'default');
   const current = $derived(app.models.find((m) => m.value === view?.model));
 
   $effect(() => {
     if (open && !dlg.open) {
       title = app.activeSummary?.title ?? '';
-      mode = (view?.mode as PermissionMode) ?? 'default';
       dlg.showModal();
     } else if (!open && dlg.open) dlg.close();
   });
 
   async function changeMode(ev: Event) {
-    const next = (ev.target as HTMLSelectElement).value as PermissionMode;
-    const ok = await app.setMode(next);
-    mode = ok ? next : ((view?.mode as PermissionMode) ?? 'default');
-    (ev.target as HTMLSelectElement).value = mode;
+    const el = ev.target as HTMLSelectElement;
+    const ok = await app.setMode(el.value as PermissionMode);
+    // The server confirms with a settings event. Until then (or if refused) show the real mode.
+    if (!ok) el.value = mode;
   }
 
   async function saveTitle() {

@@ -50,7 +50,10 @@ export function attachWebSocket(
       if (!row) ws.close(4401, 'signed out');
       return row;
     };
-    const timer = setInterval(alive, RECHECK_MS);
+    // The ping lets the page notice a dead connection (a phone that slept) and reconnect.
+    const timer = setInterval(() => {
+      if (alive()) send({ t: 'ping' });
+    }, RECHECK_MS);
     timer.unref();
 
     ws.on('close', () => {

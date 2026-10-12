@@ -97,7 +97,11 @@ describe('secrets in logs', () => {
   it('a failed login never writes the password, code or cookie into logs or the audit log', async () => {
     kit = await makeKit();
     await kit.call({ method: 'POST', url: '/api/auth/password', payload: { password: 'hunter2-hunter2' } });
-    await kit.call({ method: 'POST', url: '/api/auth/totp', payload: { pendingId: 'p'.repeat(10), code: '654321' } });
+    await kit.call({
+      method: 'POST',
+      url: '/api/auth/totp',
+      payload: { pendingId: 'p'.repeat(10), code: '654321' },
+    });
     const all = JSON.stringify([kit.logs, kit.auth.recentAudit()]);
     expect(all).not.toContain('hunter2');
     expect(all).not.toContain('654321');
@@ -133,10 +137,12 @@ describe('startup refusals and the agent environment', () => {
     const { loadConfig } = await import('./config.js');
     const base = { ANTLINGS_SECRET_KEY: Buffer.alloc(32, 7).toString('base64') };
     expect(() => loadConfig({ ...base, ANTLINGS_HOST: '0.0.0.0' })).toThrow(/loopback/);
-    expect(() => loadConfig({ ...base, NODE_ENV: 'production', ANTLINGS_ORIGIN: 'http://ants.example.com' })).toThrow(
-      /https/,
+    expect(() =>
+      loadConfig({ ...base, NODE_ENV: 'production', ANTLINGS_ORIGIN: 'http://ants.example.com' }),
+    ).toThrow(/https/);
+    expect(() => loadConfig({ ...base, ANTLINGS_AUTH_MODE: 'subscription' })).toThrow(
+      /ANTLINGS_SUBSCRIPTION_OK/,
     );
-    expect(() => loadConfig({ ...base, ANTLINGS_AUTH_MODE: 'subscription' })).toThrow(/ANTLINGS_SUBSCRIPTION_OK/);
     expect(() => loadConfig({ ANTLINGS_SECRET_KEY: 'short' })).toThrow(/32 bytes/);
   });
 

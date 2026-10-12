@@ -27,6 +27,8 @@
   let fbOpen = $state(false);
   let rootEl: HTMLElement | undefined = $state();
   let deviceName = $state('');
+  // Bumped on every reload so one-way controls redraw with the server's value after a refused change.
+  let version = $state(0);
 
   const WARN = new Set(['auth_failure', 'lockout', 'reset_access', 'passkey_removed', 'signout_all', 'fallback_pending']);
   const when = (t: number) => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
@@ -36,6 +38,7 @@
   async function load() {
     try {
       data = await get<Data>('/api/security');
+      version++;
     } catch {
       err = 'Could not load security details.';
     }
@@ -102,7 +105,11 @@
   }
 
   async function signOutDevice(id: string) {
-    await post('/api/auth/logout-device', { id });
+    try {
+      await post('/api/auth/logout-device', { id });
+    } catch {
+      err = 'That device could not be signed out.';
+    }
     await load();
   }
 
@@ -200,6 +207,7 @@
       <button class="btn danger add" type="button" onclick={signOutAll}>Sign out everywhere</button>
 
       <h2>Notifications and sign-in</h2>
+      {#key version}
       <label class="opt"><input type="checkbox" checked={data.settings.signinAlerts} onchange={setAlerts} /> Notify me when someone signs in</label>
       <div class="opt">
         <label for="idle">Sign out after being idle for</label>
@@ -208,6 +216,7 @@
           {#if !IDLE.includes(data.settings.idleTimeoutHours)}<option value={data.settings.idleTimeoutHours}>{data.settings.idleTimeoutHours} h</option>{/if}
         </select>
       </div>
+      {/key}
       {#if push === 'unsupported'}
         <p class="pw-hint">Push notifications need the app installed from an https address. On iPhone, add it to the home screen first.</p>
       {:else if push === 'denied'}

@@ -16,9 +16,15 @@ interface Entry extends Registration {
 const entries = new Set<Entry>();
 const reduce = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 let raf = 0;
+let lastFrame = -1;
 
 function tick(t: number): void {
   const f = Math.floor((t / 1000) * FPS);
+  if (f === lastFrame) {
+    raf = requestAnimationFrame(tick); // the display may run at 60 to 120 Hz, the art at 8 fps
+    return;
+  }
+  lastFrame = f;
   for (const e of entries) {
     if (e.canvas.offsetParent === null) continue; // hidden
     const ff = !reduce?.matches && e.animated ? f : 0;

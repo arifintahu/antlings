@@ -93,7 +93,7 @@ test('archive and unarchive', async ({ page }) => {
   await say(page, 'hello');
   await expect(page.getByText('Hi there')).toBeVisible();
   await page.getByRole('button', { name: 'Session actions' }).click();
-  await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+  await page.locator('#sessmenu').getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByText('No session open')).toBeVisible();
   await page.getByRole('tab', { name: /Archived 1/ }).click();
   await expect(page.getByRole('button', { name: /Session/ }).first()).toBeVisible();
@@ -115,7 +115,7 @@ test('delete needs a fresh passkey check', async ({ page }) => {
   // first-run made the session fresh; wait it out by dropping freshness on the server clock is not possible,
   // so ask the server to make us stale by using a second page without step-up
   await page.getByRole('button', { name: 'Session actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await page.locator('#sessmenu').getByRole('button', { name: 'Delete…' }).click();
   const dlg = page.getByRole('dialog', { name: 'Delete session?' });
   await expect(dlg).toBeVisible();
   await expectAccessible(page, 'delete dialog');
@@ -217,12 +217,12 @@ test('Escape closes the sidebar drawer, the context panel and the session menu',
   await page.keyboard.press('Escape');
   await expect(page.locator('#ctxpanel')).toBeHidden();
   await page.getByRole('button', { name: 'Session actions' }).click();
-  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(page.locator('#sessmenu')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('menu')).toBeHidden();
+  await expect(page.locator('#sessmenu')).toBeHidden();
   // dialogs close with Escape too
   await page.getByRole('button', { name: 'Session actions' }).click();
-  await page.getByRole('menuitem', { name: 'Settings…' }).click();
+  await page.locator('#sessmenu').getByRole('button', { name: 'Settings…' }).click();
   await expect(page.getByRole('dialog', { name: 'Session settings' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Session settings' })).toBeHidden();
@@ -297,6 +297,8 @@ test('reduced motion stops the ant animation', async ({ page }) => {
       .locator('.worker canvas')
       .first()
       .evaluate((c: HTMLCanvasElement) => c.toDataURL());
+  await expect(page.locator('.worker .act').first()).toHaveText('Thinking');
+  await page.waitForTimeout(400); // the state change has been drawn
   const a = await frame();
   await page.waitForTimeout(600);
   expect(await frame()).toBe(a);

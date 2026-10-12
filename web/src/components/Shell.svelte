@@ -77,7 +77,10 @@
     ev.preventDefault();
     const text = prompt.trim();
     if (!text || composerOff) return;
-    app.send(ant ? `Continue the "${ant.subagentType}" subagent ("${ant.description}") with this follow-up: ${text}` : text);
+    const sent = app.send(
+      ant ? `Continue the "${ant.subagentType}" subagent ("${ant.description}") with this follow-up: ${text}` : text,
+    );
+    if (!sent) return; // keep the text so it is not lost
     prompt = '';
     if (ant) app.focus = 'lead';
   }
@@ -129,7 +132,7 @@
 
 <svelte:window onkeydown={esc} onclick={outside} />
 
-<div class="app">
+<div class="app" inert={app.securityOpen}>
   <Sidebar
     open={drawer}
     inert={!desktop && !drawer}
@@ -172,13 +175,13 @@
     </header>
 
     {#if view && menuOpen}
-      <div class="menu" id="sessmenu" role="menu">
-        <button type="button" role="menuitem" onclick={() => ((menuOpen = false), (settingsOpen = true))}>Settings…</button>
-        {#if doneCount}<button type="button" role="menuitem" onclick={archiveDone}>Archive all done ({doneCount})</button>{/if}
-        <button type="button" role="menuitem" onclick={() => app.activeId && ((menuOpen = false), app.archive(app.activeId, !archived))}>
+      <div class="menu" id="sessmenu">
+        <button type="button" onclick={() => ((menuOpen = false), (settingsOpen = true))}>Settings…</button>
+        {#if doneCount}<button type="button" onclick={archiveDone}>Archive all done ({doneCount})</button>{/if}
+        <button type="button" onclick={() => app.activeId && ((menuOpen = false), app.archive(app.activeId, !archived))}>
           {archived ? 'Unarchive' : 'Archive'}
         </button>
-        <button class="danger" type="button" role="menuitem" onclick={() => ((menuOpen = false), (confirmDelete = true))}>Delete…</button>
+        <button class="danger" type="button" onclick={() => ((menuOpen = false), (confirmDelete = true))}>Delete…</button>
       </div>
     {/if}
     {#if view && ctxOpen}

@@ -273,6 +273,17 @@ describe('replay after reconnect', () => {
     expect(got[0]).toBe(4);
   });
 
+  it('replays a backlog larger than one page, with nothing missing', async () => {
+    kit = await makeKit();
+    const { id } = await kit.mgr.create(NEW);
+    for (let i = 0; i < 4500; i++) kit.mgr.emit(id, { k: 'notice', message: `n${i}` });
+    const got: number[] = [];
+    const off = kit.mgr.subscribe(id, 0, (m) => m.t === 'event' && got.push(m.seq));
+    off();
+    expect(got).toHaveLength(4501);
+    expect(got).toEqual(Array.from({ length: 4501 }, (_, i) => i + 1));
+  });
+
   it('keeps the sequence going after a restart', async () => {
     kit = await makeKit();
     const { id } = await kit.mgr.create(NEW);

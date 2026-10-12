@@ -29,12 +29,23 @@ export async function pushState(): Promise<PushState> {
 
 export async function enablePush(): Promise<PushState> {
   if (!supported()) return 'unsupported';
+  // Ask first, while the tap is fresh (Safari rejects the prompt after an await).
+  if ((await Notification.requestPermission()) !== 'granted') return 'denied';
   const { key } = await get<{ key: string | null }>('/api/push/key');
   if (!key) return 'unsupported';
-  if ((await Notification.requestPermission()) !== 'granted') return 'denied';
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('no service worker')), 5000)),
+  ]);
+  const old = await reg.pushManager.getSubscription();
+  if (old) await old.unsubscribe(); // a subscription made with another key would throw
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
-  await post('/api/push/subscribe', sub.toJSON());
+  try {
+    await post('/api/push/subscribe', sub.toJSON());
+  } catch (e) {
+    await sub.unsubscribe(); // keep the browser and the server in step
+    throw e;
+  }
   return 'on';
 }
 

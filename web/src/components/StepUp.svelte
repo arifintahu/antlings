@@ -17,12 +17,14 @@
     }
   });
 
-  function finish(ok: boolean) {
-    if (dlg.open) dlg.close();
-    app.stepUpDone(ok);
+  // Results are tied to the ask that was open when the prompt started.
+  function finish(ok: boolean, id = app.stepUpAsk?.id) {
+    if (dlg.open && app.stepUpAsk?.id === id) dlg.close();
+    app.stepUpDone(ok, id);
   }
 
   async function usePasskey() {
+    const askId = app.stepUpAsk?.id;
     busy = true;
     err = '';
     try {
@@ -31,7 +33,7 @@
       );
       const response = await startAuthentication({ optionsJSON: o.options });
       await post('/api/auth/stepup/passkey/verify', { challengeId: o.challengeId, response });
-      finish(true);
+      finish(true, askId);
     } catch (e) {
       err = e instanceof ApiError && e.status === 429 ? 'Too many attempts. Wait and try again.' : 'That did not work. Try again or use your code.';
     } finally {

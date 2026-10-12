@@ -20,7 +20,14 @@
   });
 </script>
 
-<a class="skip" href="#chat">Skip to conversation</a>
+<a
+  class="skip"
+  href="/"
+  onclick={(e) => {
+    e.preventDefault();
+    document.getElementById('chat')?.focus();
+  }}>Skip to conversation</a
+>
 
 {#if offline}
   <div class="banner" role="status">

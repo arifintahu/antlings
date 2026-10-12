@@ -1,0 +1,12 @@
+# Ban an address at the firewall after repeated failed sign-ins. The app already locks an address for
+# 15 minutes after 5 failures. This adds a longer, network-level ban for addresses that keep trying.
+[antlings]
+enabled  = true
+backend  = systemd
+journalmatch = _SYSTEMD_UNIT=antlings.service
+filter   = antlings
+maxretry = 10
+findtime = 1h
+bantime  = 6h
+# Ports served by Caddy. The jail does not touch ufw.
+port     = http,https
