@@ -35,6 +35,18 @@ BACKUP_DIR=/var/backups/antlings-$(date +%F)
 STATE_DIR=/var/backups/antlings-state
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# Prefers conf.d when the main Caddyfile already imports /etc/caddy/conf.d/*.caddy, so no edit of it is needed.
+if [ -d /etc/caddy/conf.d ] && grep -Eqs '^[[:space:]]*import[[:space:]]+/etc/caddy/conf\.d/\*\.caddy([[:space:]]|$)' "$CADDY_MAIN"; then
+  CADDY_FILE=/etc/caddy/conf.d/antlings.caddy
+fi
+# True when the main Caddyfile imports the Antlings file, by name or by a glob of its folder.
+caddy_imports_file() {
+  local esc dir
+  esc=$(printf '%s' "$CADDY_FILE" | sed 's/[.]/\\./g')
+  dir=$(dirname "$CADDY_FILE" | sed 's/[.]/\\./g')
+  grep -Eqs "^[[:space:]]*import[[:space:]]+($esc|$dir/\\*\\.caddy)([[:space:]]|\$)" "$CADDY_MAIN"
+}
+
 DRY=0
 RELEASE=""
 DOMAIN=""
@@ -327,7 +339,7 @@ else
     if [ ! -f "$CADDY_FILE" ] || ! cmp -s "$snippet" "$CADDY_FILE"; then caddy_changed=1; fi
     install_file "$snippet" "$CADDY_FILE" 644 root:root
     rm -f "$snippet"
-    if grep -Eqs '^[[:space:]]*import[[:space:]]+(/etc/caddy/antlings\.caddy|/etc/caddy/\*\.caddy)' "$CADDY_MAIN"; then
+    if caddy_imports_file; then
       if [ "$DRY" -eq 1 ]; then note "[dry-run] caddy validate --config $CADDY_MAIN, then systemctl reload caddy"; else
         if ! caddy validate --config "$CADDY_MAIN"; then
           # The main Caddyfile already imports this file. Leaving a broken one would break every site on the next reload.

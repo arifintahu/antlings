@@ -8,7 +8,20 @@ related: [PLAN, RUNBOOK, PROGRESS, DECISIONS, BLOCKERS, 0002-authentication-and-
 
 # Antlings v0.1 handoff #antlings #handoff
 
-Read this first. Nothing was pushed, merged to `main`, or deployed. Work is on branch `build/v0.1`.
+Read this first. Nothing was pushed or merged to `main`. Work is on branch `build/v0.1`.
+
+## 0. Deployed (test deploy, 2026-10-12)
+
+After the build, you authorized a test deploy to `$VPS_HOST` with the domain `ants.arifintahu.com`. It is installed and running, but **not signed in to yet**: I did not run `antlings setup`, register a passkey, or log in to Claude.
+
+- Release `antlings-0.1.0-202610121408` installed by `deploy/install.sh` (sha256 checked). Service `antlings` is active as user `antlings`, listening on `127.0.0.1:3100`, 77 MB resident at idle.
+- Caddy: `/etc/caddy/conf.d/antlings.caddy` (the main Caddyfile already imports that folder, so it was not edited). `caddy validate` passed, Caddy reloaded, and `https://ants.arifintahu.com/health` answers. Other Caddy sites were not touched.
+- Public checks passed: 401 without a session (also for an encoded path), WebSocket without Origin refused, CSP, HSTS, nosniff and referrer headers present, first run open.
+- The unit's sandbox settings were tried with Claude Code and git under `systemd-run` (write in `/home/antlings`, `/home/ubuntu` blocked): they work.
+- Also installed: `/etc/ssh/sshd_config.d/antlings.conf` with `DenyUsers antlings` (inactive until you run `sudo systemctl reload ssh`), `/usr/local/bin/antlings`, and `/root/antlings-release/` (tarball and checksum, kept for rollback). fail2ban is not installed on this server, so no jail.
+- Existing env: no API key yet (the line is commented). Claude path is `/usr/bin/claude` (v2.1.287).
+
+To finish: set `ANTHROPIC_API_KEY` (or log in as the service user), run `sudo -u antlings antlings setup`, open https://ants.arifintahu.com, register your passkey, and start a first session.
 
 ## 1. Result in 10 lines
 
@@ -18,7 +31,7 @@ Read this first. Nothing was pushed, merged to `main`, or deployed. Work is on b
 4. Built: Svelte web app with every mockup screen, PWA files, Web Push, offline banner, reconnect with replay by sequence number.
 5. Built: deploy files for a systemd service behind Caddy, fail2ban filter and jail, installer with dry run, uninstaller, release build, runbook.
 6. Tested: 3 + 174 + 81 unit tests, 20 browser tests (virtual passkey, axe, 375 px phone layout), lint, build, shellcheck. A release built in Docker passed a smoke test and a full install/uninstall test in a Node 24 Linux container.
-7. Not done: M7. `DEPLOY=no`, so the VPS was never contacted. No domain was given.
+7. M7 ran after you authorized it (section 0). Install and smoke checks passed. A real session was not started, because that needs your login and setup code.
 8. Not verified on real systems: Caddy validation, fail2ban, Web Push on a phone, plan usage meter, a long real subagent, two sessions under memory pressure on the 2 GB VPS.
 9. Idle service memory is 85 MB in a container, about 100 MB after the first passkey sign-in. The target was under 100 MB.
 10. Biggest risk: the agent and the service run as the same Unix user. See section 4.

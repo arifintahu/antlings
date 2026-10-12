@@ -25,3 +25,5 @@ tags: [antlings, decisions]
 | 2026-10-12 | Caddy rate limit is a commented block that install.sh enables only if the module exists | Stock Caddy has no rate limiter. The app lockout works without it |
 | 2026-10-12 | Playwright runs on the installed Chrome (`channel: chrome`) | The machine's `PLAYWRIGHT_BROWSERS_PATH` points at another project's folder and lacks this version. Avoids a download |
 | 2026-10-12 | Service and agent stay one Unix user in v0.1 | ADR 0003 and spec ask for user `antlings`. The risk is listed in ADR 0002 and the handoff |
+| 2026-10-12 | Installer puts the Caddy file in `conf.d` when the main Caddyfile already imports `/etc/caddy/conf.d/*.caddy` | No edit of the main Caddyfile needed. Found on the VPS during the test deploy |
+| 2026-10-12 | `--skip-dns-check` used for the test deploy | The VPS interface has a private address (NAT), the DNS check compares with interface addresses |

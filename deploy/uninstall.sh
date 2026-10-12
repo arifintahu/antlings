@@ -23,6 +23,18 @@ F2B_FILTER=/etc/fail2ban/filter.d/antlings.conf
 F2B_JAIL=/etc/fail2ban/jail.d/antlings.local
 SSHD_CONF=/etc/ssh/sshd_config.d/antlings.conf
 
+# Prefers conf.d when the main Caddyfile already imports /etc/caddy/conf.d/*.caddy, so no edit of it is needed.
+if [ -d /etc/caddy/conf.d ] && grep -Eqs '^[[:space:]]*import[[:space:]]+/etc/caddy/conf\.d/\*\.caddy([[:space:]]|$)' "$CADDY_MAIN"; then
+  CADDY_FILE=/etc/caddy/conf.d/antlings.caddy
+fi
+# True when the main Caddyfile imports the Antlings file, by name or by a glob of its folder.
+caddy_imports_file() {
+  local esc dir
+  esc=$(printf '%s' "$CADDY_FILE" | sed 's/[.]/\\./g')
+  dir=$(dirname "$CADDY_FILE" | sed 's/[.]/\\./g')
+  grep -Eqs "^[[:space:]]*import[[:space:]]+($esc|$dir/\\*\\.caddy)([[:space:]]|\$)" "$CADDY_MAIN"
+}
+
 DRY=0
 PURGE=0
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -80,7 +92,7 @@ if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fai
 
 step "Caddy"
 if [ -e "$CADDY_FILE" ]; then
-  if grep -Eqs "^[[:space:]]*import[[:space:]]+$CADDY_FILE([[:space:]]|$)" "$CADDY_MAIN"; then
+  if grep -Eqs "^[[:space:]]*import[[:space:]]+$(printf '%s' "$CADDY_FILE" | sed 's/[.]/\\./g')([[:space:]]|\$)" "$CADDY_MAIN"; then
     note "$CADDY_MAIN still imports the Antlings file. Remove that import line yourself, then validate and reload."
     note "The file $CADDY_FILE is kept until the import is gone."
   else

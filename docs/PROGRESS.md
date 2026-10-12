@@ -22,8 +22,11 @@ Branch `build/v0.1`, nothing pushed, nothing merged to `main`.
 - Release smoke test in a Node 24 container as an unprivileged user: all checks pass, idle memory 85 MB.
 - Container install test (real install, second install, backup of an edited unit, low-memory refusal, uninstall, purge): all pass.
 
+## M7 result
+Test deploy to the owner's VPS with domain ants.arifintahu.com: installed, healthy, public HTTPS checks passed, 77 MB idle, sandbox verified with Claude Code. No setup code, passkey or Claude login was done.
+
 ## Next
-- M7 skipped (DEPLOY=no). M8 handoff.
+- M7 done after the owner authorized it in chat. M8 handoff written.
 
 ## Open problems
 - Plan usage returned `unavailable` in the live run (subscription login on this machine).

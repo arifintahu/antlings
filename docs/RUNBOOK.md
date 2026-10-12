@@ -35,7 +35,7 @@ Copy the tarball and its `.sha256` file to a folder that only root can write on 
 ```bash
 sudo mkdir -p /root/antlings-release && cd /root/antlings-release     # put the two files here first
 sha256sum -c antlings-<version>.tar.gz.sha256                          # compare with the value printed on your build machine
-sudo tar -xzf antlings-<version>.tar.gz deploy
+sudo tar -xzf antlings-<version>.tar.gz ./deploy
 sudo ./deploy/install.sh --dry-run --release antlings-<version>.tar.gz --domain ants.example.com   # read the output first
 sudo ./deploy/install.sh --release antlings-<version>.tar.gz --domain ants.example.com
 ```
