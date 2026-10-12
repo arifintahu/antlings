@@ -1,14 +1,3 @@
-import {
-  deleteSession,
-  getSessionInfo,
-  getSessionMessages,
-  getSubagentMessages,
-  listSessions,
-  listSubagents,
-  renameSession,
-  tagSession,
-} from '@anthropic-ai/claude-agent-sdk';
-
 export interface TranscriptInfo {
   sessionId: string;
   summary: string;
@@ -39,13 +28,16 @@ export interface Transcripts {
   remove(id: string): Promise<void>;
 }
 
+// The SDK is a large module. It is loaded on first use so an idle service stays small.
+const sdk = () => import('@anthropic-ai/claude-agent-sdk');
+
 export const sdkTranscripts: Transcripts = {
-  list: () => listSessions(),
-  info: (id) => getSessionInfo(id),
-  messages: (id) => getSessionMessages(id, { includeSystemMessages: false }),
-  subagents: (id) => listSubagents(id),
-  subagentMessages: (id, agentId) => getSubagentMessages(id, agentId),
-  rename: (id, title) => renameSession(id, title),
-  tag: (id, tag) => tagSession(id, tag),
-  remove: (id) => deleteSession(id),
+  list: async () => (await sdk()).listSessions(),
+  info: async (id) => (await sdk()).getSessionInfo(id),
+  messages: async (id) => (await sdk()).getSessionMessages(id, { includeSystemMessages: false }),
+  subagents: async (id) => (await sdk()).listSubagents(id),
+  subagentMessages: async (id, agentId) => (await sdk()).getSubagentMessages(id, agentId),
+  rename: async (id, title) => (await sdk()).renameSession(id, title),
+  tag: async (id, tag) => (await sdk()).tagSession(id, tag),
+  remove: async (id) => (await sdk()).deleteSession(id),
 };

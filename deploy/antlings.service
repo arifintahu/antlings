@@ -12,6 +12,8 @@ WorkingDirectory=/opt/antlings/current/app
 # Secrets live here (mode 640, root:antlings). The unit never prints them.
 EnvironmentFile=/etc/antlings/antlings.env
 Environment=NODE_ENV=production
+# A small young generation keeps the resident size of an idle service down.
+Environment=NODE_OPTIONS=--max-semi-space-size=1
 ExecStart=/usr/bin/node dist/main.js
 Restart=on-failure
 RestartSec=3

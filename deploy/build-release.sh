@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=$(node -p "require('$ROOT/package.json').version")
+VERSION=$(grep -m1 '"version"' "$ROOT/package.json" | cut -d'"' -f4)
 STAMP=$(date +%Y%m%d%H%M)
 OUT=$ROOT/dist-release
 NAME=antlings-$VERSION-$STAMP
@@ -21,15 +21,18 @@ MSYS_NO_PATHCONV=1 docker run --rm \
   -e NAME="$NAME" \
   node:24-slim bash -c '
     set -euo pipefail
-    npm install -g pnpm@9.15.9 >/dev/null 2>&1
+    npm install -g pnpm@9.15.9 2>&1 | tail -2
     mkdir /w && cd /src
     tar --exclude=node_modules --exclude=dist --exclude=dist-release --exclude=.git --exclude=test-results -cf - . | tar -xf - -C /w
     cd /w
-    pnpm install --frozen-lockfile >/dev/null
+    # better-sqlite3 ships prebuilt Linux binaries. Scripts are skipped so no compiler is ever needed.
+    pnpm install --frozen-lockfile --ignore-scripts 2>&1 | tail -3
     pnpm build
     pnpm --filter @antlings/server --prod deploy /pack/app >/dev/null
     mkdir -p /pack/rel/app /pack/rel/web /pack/rel/deploy
     cp -a /pack/app/. /pack/rel/app/
+    # The VPS has its own claude binary (ANTLINGS_CLAUDE_PATH). The ~250 MB copies bundled with the SDK are not needed.
+    rm -rf /pack/rel/app/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-linux-* /pack/rel/app/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-darwin-* /pack/rel/app/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-win32-*
     cp -a server/dist /pack/rel/app/dist
     cp -a web/dist/. /pack/rel/web/
     cp -a deploy/. /pack/rel/deploy/

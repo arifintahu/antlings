@@ -207,6 +207,7 @@ export class SessionManager {
     mode: PermissionMode;
   }): Promise<SessionMeta> {
     this.checkLimit();
+    await this.d.agents.load?.();
     const meta: SessionMeta = {
       id: randomUUID(),
       cwd: input.cwd,
@@ -233,6 +234,7 @@ export class SessionManager {
     this.checkLimit();
     this.starting.add(id);
     try {
+      await this.d.agents.load?.();
       let meta = this.meta(id);
       if (!meta) {
         const info = await this.d.transcripts.info(id);

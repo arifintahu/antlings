@@ -82,16 +82,25 @@ fi
 
 if [ -r /proc/meminfo ]; then
   avail_mb=$(awk '/MemAvailable/ {printf "%d", $2 / 1024}' /proc/meminfo)
-  note "available memory: ${avail_mb} MB (needs at least ${MIN_FREE_MB} MB)"
-  if [ "$avail_mb" -lt "$MIN_FREE_MB" ]; then die "only ${avail_mb} MB free. Free memory first, nothing was changed."; fi
+  if [ -z "$avail_mb" ]; then
+    if [ "$DRY" -eq 1 ]; then note "MemAvailable not reported here: memory check skipped in this dry run"; else die "cannot read MemAvailable"; fi
+  else
+    note "available memory: ${avail_mb} MB (needs at least ${MIN_FREE_MB} MB)"
+    if [ "$avail_mb" -lt "$MIN_FREE_MB" ]; then die "only ${avail_mb} MB free. Free memory first, nothing was changed."; fi
+  fi
 else
   if [ "$DRY" -eq 1 ]; then note "no /proc/meminfo here: memory check skipped in this dry run"; else die "cannot read /proc/meminfo"; fi
 fi
 
+NODE_BIN=/usr/bin/node
 if command -v node >/dev/null 2>&1; then
+  NODE_BIN=$(command -v node)
   node_major=$(node -p 'process.versions.node.split(".")[0]')
-  note "node $(node -v)"
+  note "node $(node -v) at $NODE_BIN"
   [ "$node_major" -ge 22 ] || die "Node 22 or newer is required"
+  case "$NODE_BIN" in
+    /home/*|/root/*) die "node is installed under a home folder ($NODE_BIN). Install Node system-wide so the antlings user can run it." ;;
+  esac
 else
   if [ "$DRY" -eq 1 ]; then note "node not found here: skipped in this dry run"; else die "node is not installed"; fi
 fi
@@ -175,7 +184,7 @@ else
         echo "ANTLINGS_MAX_SUBAGENTS=3"
         echo "# Set your API key on the next line, then: systemctl restart antlings"
         echo "# ANTHROPIC_API_KEY="
-        /usr/bin/node "$INSTALL_DIR/current/app/dist/cli.js" gen-env
+        "$NODE_BIN" "$INSTALL_DIR/current/app/dist/cli.js" gen-env
       } > "$ENV_FILE"
     )
     chown "root:$APP_USER" "$ENV_FILE"
@@ -188,9 +197,12 @@ fi
 step "Command and service"
 wrapper=$(mktemp)
 trap 'rm -f "$wrapper"' EXIT
-printf '#!/bin/sh\nexec /usr/bin/node %s/current/app/dist/cli.js "$@"\n' "$INSTALL_DIR" > "$wrapper"
+printf '#!/bin/sh\nexec %s %s/current/app/dist/cli.js "$@"\n' "$NODE_BIN" "$INSTALL_DIR" > "$wrapper"
 install_file "$wrapper" "$BIN" 755 root:root
-install_file "$HERE/antlings.service" "$UNIT" 644 root:root
+unit_tmp=$(mktemp)
+sed "s#^ExecStart=/usr/bin/node #ExecStart=$NODE_BIN #" "$HERE/antlings.service" > "$unit_tmp"
+install_file "$unit_tmp" "$UNIT" 644 root:root
+rm -f "$unit_tmp"
 run systemctl daemon-reload
 run systemctl enable antlings
 
@@ -198,7 +210,7 @@ step "fail2ban"
 if [ -d /etc/fail2ban ]; then
   install_file "$HERE/fail2ban/filter.d/antlings.conf" "$F2B_FILTER" 644 root:root
   install_file "$HERE/fail2ban/jail.d/antlings.local" "$F2B_JAIL" 644 root:root
-  if systemctl is-active --quiet fail2ban 2>/dev/null; then run fail2ban-client reload; else note "fail2ban is not running: files installed, no reload"; fi
+  if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fail2ban 2>/dev/null; then run fail2ban-client reload; else note "fail2ban is not running: files installed, no reload"; fi
 else
   note "fail2ban is not installed: skipped. Install it and run this script again to add the jail."
 fi

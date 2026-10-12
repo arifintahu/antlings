@@ -1,10 +1,9 @@
-import {
-  query,
-  type CanUseTool,
-  type ModelInfo,
-  type Options,
-  type SDKMessage,
-  type SDKUserMessage,
+import type {
+  CanUseTool,
+  ModelInfo,
+  Options,
+  SDKMessage,
+  SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { PermissionMode } from '@antlings/shared';
 import type { Config } from './config.js';
@@ -57,6 +56,8 @@ export interface AgentHandle {
 }
 
 export interface AgentFactory {
+  /** Loads the SDK on first use. It is a large module, so the idle service does not pay for it. */
+  load?(): Promise<void>;
   start(o: StartOptions): AgentHandle;
   /** Lists models without a user session. May start and stop a short-lived process. */
   probeModels(): Promise<ModelInfo[]>;
@@ -110,6 +111,11 @@ export function sdkEnv(
 }
 
 export function sdkAgentFactory(config: Config): AgentFactory {
+  let sdk: typeof import('@anthropic-ai/claude-agent-sdk') | undefined;
+  const query = (p: Parameters<NonNullable<typeof sdk>['query']>[0]) => {
+    if (!sdk) throw new Error('SDK not loaded');
+    return sdk.query(p);
+  };
   const baseOptions = (): Options => ({
     ...(config.claudePath ? { pathToClaudeCodeExecutable: config.claudePath } : {}),
     settingSources: ['project'],
@@ -118,6 +124,10 @@ export function sdkAgentFactory(config: Config): AgentFactory {
   });
 
   return {
+    async load() {
+      sdk ??= await import('@anthropic-ai/claude-agent-sdk');
+    },
+
     start(o) {
       const inbox = new Inbox();
       const abort = new AbortController();
@@ -168,6 +178,7 @@ export function sdkAgentFactory(config: Config): AgentFactory {
     },
 
     async probeModels() {
+      sdk ??= await import('@anthropic-ai/claude-agent-sdk');
       const inbox = new Inbox();
       const q = query({
         prompt: inbox.iterate(),

@@ -66,7 +66,7 @@ restore_or_remove "$BIN"
 step "fail2ban"
 restore_or_remove "$F2B_FILTER"
 restore_or_remove "$F2B_JAIL"
-if systemctl is-active --quiet fail2ban 2>/dev/null; then run fail2ban-client reload; fi
+if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fail2ban 2>/dev/null; then run fail2ban-client reload; fi
 
 step "Caddy"
 if [ -e "$CADDY_FILE" ]; then

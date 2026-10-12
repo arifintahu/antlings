@@ -1,12 +1,11 @@
-import {
-  generateAuthenticationOptions,
-  generateRegistrationOptions,
-  verifyAuthenticationResponse,
-  verifyRegistrationResponse,
-  type AuthenticationResponseJSON,
-  type RegistrationResponseJSON,
-  type WebAuthnCredential,
+import type {
+  AuthenticationResponseJSON,
+  RegistrationResponseJSON,
+  WebAuthnCredential,
 } from '@simplewebauthn/server';
+
+// The WebAuthn library is about 15 MB resident once loaded, so it is loaded on the first passkey request.
+const lib = () => import('@simplewebauthn/server');
 
 export interface StoredPasskey {
   id: string;
@@ -37,6 +36,7 @@ const USER_ID = new TextEncoder().encode('antlings-owner');
 export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
   return {
     async registrationOptions(existingIds, userName) {
+      const { generateRegistrationOptions } = await lib();
       const options = await generateRegistrationOptions({
         rpName: 'Antlings',
         rpID: rpId,
@@ -50,6 +50,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
     },
     async verifyRegistration(response, challenge) {
       try {
+        const { verifyRegistrationResponse } = await lib();
         const v = await verifyRegistrationResponse({
           response: response as RegistrationResponseJSON,
           expectedChallenge: challenge,
@@ -70,6 +71,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
       }
     },
     async authOptions() {
+      const { generateAuthenticationOptions } = await lib();
       const options = await generateAuthenticationOptions({ rpID: rpId, userVerification: 'required' });
       return { options, challenge: options.challenge };
     },
@@ -84,6 +86,7 @@ export function realWebAuthn(rpId: string, origin: string): WebAuthnService {
           counter: stored.counter,
           transports: stored.transports as WebAuthnCredential['transports'],
         };
+        const { verifyAuthenticationResponse } = await lib();
         const v = await verifyAuthenticationResponse({
           response: r,
           expectedChallenge: challenge,
