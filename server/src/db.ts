@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS event_log (
 CREATE TABLE IF NOT EXISTS session_meta (
   id TEXT PRIMARY KEY, cwd TEXT NOT NULL, model TEXT NOT NULL, effort TEXT, mode TEXT NOT NULL, created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS session_pins (id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL);
 `;
 

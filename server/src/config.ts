@@ -15,6 +15,7 @@ const Env = z.object({
   ANTLINGS_MAX_SESSIONS: z.coerce.number().int().min(1).max(8).default(2),
   ANTLINGS_MAX_SUBAGENTS: z.coerce.number().int().min(1).max(8).default(3),
   ANTLINGS_IDLE_HOURS: z.coerce.number().int().min(1).max(720).default(12),
+  ANTLINGS_EVENT_KEEP: z.coerce.number().int().min(500).max(1_000_000).default(20_000),
   ANTLINGS_STATIC_DIR: z.string().optional(),
   ANTLINGS_VAPID_PUBLIC: z.string().optional(),
   ANTLINGS_VAPID_PRIVATE: z.string().optional(),
@@ -34,6 +35,8 @@ export interface Config {
   maxSessions: number;
   maxSubagents: number;
   idleHours: number;
+  /** Events kept per session in the log. Older ones stay in the Claude transcript. */
+  eventKeep: number;
   staticDir?: string;
   vapid?: { publicKey: string; privateKey: string; subject: string };
 }
@@ -65,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxSessions: e.ANTLINGS_MAX_SESSIONS,
     maxSubagents: e.ANTLINGS_MAX_SUBAGENTS,
     idleHours: e.ANTLINGS_IDLE_HOURS,
+    eventKeep: e.ANTLINGS_EVENT_KEEP,
     staticDir: e.ANTLINGS_STATIC_DIR ? resolve(e.ANTLINGS_STATIC_DIR) : undefined,
     vapid:
       e.ANTLINGS_VAPID_PUBLIC && e.ANTLINGS_VAPID_PRIVATE

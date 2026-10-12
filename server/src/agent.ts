@@ -120,7 +120,7 @@ export function sdkAgentFactory(config: Config): AgentFactory {
     ...(config.claudePath ? { pathToClaudeCodeExecutable: config.claudePath } : {}),
     settingSources: ['project'],
     env: sdkEnv(config),
-    includePartialMessages: false,
+    includePartialMessages: true,
   });
 
   return {

@@ -82,8 +82,9 @@ export class PushService implements Notifier {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions').get() as { n: number }).n;
   }
 
-  async notify(p: PushPayload): Promise<void> {
-    if (!this.vapid) return;
+  /** Returns how many devices were tried. */
+  async notify(p: PushPayload): Promise<number> {
+    if (!this.vapid) return 0;
     const rows = this.db.prepare('SELECT endpoint, data FROM push_subscriptions').all() as {
       endpoint: string;
       data: string;
@@ -102,6 +103,7 @@ export class PushService implements Notifier {
         }
       }),
     );
+    return rows.length;
   }
 
   approvalWaiting(sessionId: string, toolName: string): void {
@@ -129,6 +131,14 @@ export class PushService implements Notifier {
 
 export function registerPushRoutes(app: FastifyInstance, push: PushService): void {
   app.get('/api/push/key', async () => ({ key: push.publicKey }));
+
+  app.post('/api/push/test', async () => ({
+    sent: await push.notify({
+      title: 'Antlings test',
+      body: 'Notifications work on this device.',
+      tag: 'test',
+    }),
+  }));
 
   app.post('/api/push/subscribe', async (req, reply) => {
     const r = Subscription.safeParse(req.body);

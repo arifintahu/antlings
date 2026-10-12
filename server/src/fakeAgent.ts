@@ -301,6 +301,22 @@ export const defaultScenario: Scenario = async (text, api) => {
     });
     return result();
   }
+  if (text === 'stream') {
+    for (const piece of ['Hel', 'lo ', 'world']) {
+      api.emit({
+        type: 'stream_event',
+        parent_tool_use_id: null,
+        event: { type: 'content_block_delta', delta: { type: 'text_delta', text: piece } },
+      });
+    }
+    api.emit({
+      type: 'stream_event',
+      parent_tool_use_id: 'sub-1',
+      event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'SUBAGENT' } },
+    });
+    say('Hello world');
+    return result();
+  }
   if (text === 'rate') {
     api.emit({
       type: 'rate_limit_event',
