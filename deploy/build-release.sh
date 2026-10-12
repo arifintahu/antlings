@@ -36,7 +36,13 @@ MSYS_NO_PATHCONV=1 docker run --rm \
     cp -a server/dist /pack/rel/app/dist
     cp -a web/dist/. /pack/rel/web/
     cp -a deploy/. /pack/rel/deploy/
-    tar -czf "/out/$NAME.tar.gz" -C /pack/rel .
+    # Refuse to ship anything that looks like a secret or local data.
+    if find /pack/rel \( -name ".env" -o -name ".env.*" -o -name "*.db" -o -name "*.pem" -o -name ".credentials*" \) -not -name ".env.example" | grep -q .; then
+      echo "the release contains a secret-looking file" >&2; exit 1
+    fi
+    chmod -R go-w,u-s,g-s,a-t /pack/rel
+    tar --owner=0 --group=0 --numeric-owner -czf "/out/$NAME.tar.gz" -C /pack/rel .
+    (cd /out && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
     chmod 644 "/out/$NAME.tar.gz"
   '
 echo "built $OUT/$NAME.tar.gz"

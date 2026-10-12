@@ -11,8 +11,15 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # Git Bash on Windows needs native paths for docker mounts.
 if command -v cygpath >/dev/null 2>&1; then TAR=$(cygpath -m "$TAR"); HERE=$(cygpath -m "$HERE"); fi
 
-MSYS_NO_PATHCONV=1 docker run --rm \
-  -v "$TAR:/rel/release.tar.gz:ro" -v "$HERE:/dep:ro" \
+SUM_MOUNT=()
+if [ -f "$1.sha256" ]; then
+  SUM=$(cd "$(dirname "$1.sha256")" && pwd)/$(basename "$1.sha256")
+  if command -v cygpath >/dev/null 2>&1; then SUM=$(cygpath -m "$SUM"); fi
+  SUM_MOUNT=(-v "$SUM:/rel/$(basename "$1").sha256:ro")
+fi
+
+MSYS_NO_PATHCONV=1 docker run --rm "${SUM_MOUNT[@]}" \
+  -e ORIG="$(basename "$1")" -v "$TAR:/rel/$(basename "$1"):ro" -v "$HERE:/dep:ro" \
   node:24-slim bash -c '
 set -euo pipefail
 apt-get update >/dev/null 2>&1
@@ -39,11 +46,26 @@ ok() { printf "ok   %s\n" "$*"; }
 bad() { printf "FAIL %s\n" "$*" >&2; exit 1; }
 expect_eq() { [ "$2" = "$3" ] && ok "$1" || bad "$1: expected $2, got $3"; }
 
+echo "--- dry run changes nothing, bad input is refused"
+bash /dep/install.sh --dry-run --release /rel/$ORIG > /tmp/dry.log 2>&1 || { cat /tmp/dry.log; bad "dry run failed"; }
+[ ! -e /opt/antlings ] && [ ! -e /etc/antlings ] && ! id antlings >/dev/null 2>&1 && ok "dry run changed nothing" || bad "dry run changed something"
+for d in "a/b" "-x" "a b" "x;rm"; do
+  bash /dep/install.sh --dry-run --domain "$d" > /tmp/dom.log 2>&1 && bad "accepted domain $d" || true
+done
+ok "odd --domain values refused"
+
+echo "--- a release with links is refused"
+mkdir -p /tmp/evil && ln -s /etc/passwd /tmp/evil/link && tar -czf /tmp/evil.tar.gz -C /tmp/evil .
+if bash /dep/install.sh --release /tmp/evil.tar.gz > /tmp/evil.log 2>&1; then bad "link release accepted"; else grep -q "links" /tmp/evil.log && ok "tarball with a symlink refused" || { cat /tmp/evil.log; bad "wrong error"; }; fi
+[ ! -e /opt/antlings/current ] && ok "nothing was switched by the refused release" || bad "current exists"
+
 echo "--- first install"
-bash /dep/install.sh --release /rel/release.tar.gz > /tmp/install1.log 2>&1 || { cat /tmp/install1.log; bad "install failed"; }
+bash /dep/install.sh --release /rel/$ORIG > /tmp/install1.log 2>&1 || { cat /tmp/install1.log; bad "install failed"; }
 expect_eq "env file mode and owner" "640 root antlings" "$(stat -c "%a %U %G" /etc/antlings/antlings.env)"
 expect_eq "data dir mode and owner" "700 antlings antlings" "$(stat -c "%a %U %G" /var/lib/antlings)"
 expect_eq "app code is owned by root" "root" "$(stat -c %U /opt/antlings/current/app/dist/main.js)"
+[ -z "$(find -L /opt/antlings/current -perm /022 -not -type l | head -1)" ] && ok "no group or world writable file in the code tree" || bad "writable files in the code tree"
+[ -z "$(find -L /opt/antlings/current -perm /6000 -not -type l | head -1)" ] && ok "no setuid or setgid file in the code tree" || bad "setuid file"
 expect_eq "unit installed" "644" "$(stat -c %a /etc/systemd/system/antlings.service)"
 expect_eq "command installed" "755" "$(stat -c %a /usr/local/bin/antlings)"
 id -nG antlings | tr " " "\n" | grep -qxE "sudo|wheel|admin|root" && bad "antlings is in a privileged group" || ok "antlings has no privileged group"
@@ -61,25 +83,26 @@ curl -fsS http://127.0.0.1:3100/api/auth/status | grep -q "\"firstRun\":true" &&
 
 echo "--- second install is a no-op for settings"
 cp /etc/antlings/antlings.env /tmp/env.before
-bash /dep/install.sh --release /rel/release.tar.gz > /tmp/install2.log 2>&1 || { cat /tmp/install2.log; bad "second install failed"; }
+bash /dep/install.sh --release /rel/$ORIG > /tmp/install2.log 2>&1 || { cat /tmp/install2.log; bad "second install failed"; }
 cmp -s /tmp/env.before /etc/antlings/antlings.env && ok "env file untouched by a second install" || bad "env changed"
 grep -q "unchanged: /etc/systemd/system/antlings.service" /tmp/install2.log && ok "unit reported unchanged" || bad "unit not unchanged"
 
 echo "--- changed unit is backed up"
 echo "# local edit" >> /etc/systemd/system/antlings.service
-bash /dep/install.sh --release /rel/release.tar.gz > /tmp/install3.log 2>&1 || bad "third install failed"
+bash /dep/install.sh --release /rel/$ORIG > /tmp/install3.log 2>&1 || bad "third install failed"
 ls /var/backups/antlings-*/ | grep -q "_etc_systemd_system_antlings.service" && ok "edited unit was backed up before replacement" || bad "no backup"
 grep -q "local edit" /etc/systemd/system/antlings.service && bad "unit not replaced" || ok "unit replaced"
 
 echo "--- low memory refusal"
 sed "s/^MIN_FREE_MB=600/MIN_FREE_MB=999999/" /dep/install.sh > /tmp/install-lowmem.sh
 cp /dep/antlings.service /tmp/ && cp -r /dep/fail2ban /tmp/ && cp /dep/Caddyfile.snippet /tmp/
-if bash /tmp/install-lowmem.sh --release /rel/release.tar.gz > /tmp/lowmem.log 2>&1; then bad "did not refuse"; else grep -q "free" /tmp/lowmem.log && ok "refuses when memory is low" || bad "wrong error"; fi
+if bash /tmp/install-lowmem.sh --release /rel/$ORIG > /tmp/lowmem.log 2>&1; then bad "did not refuse"; else grep -q "free" /tmp/lowmem.log && ok "refuses when memory is low" || bad "wrong error"; fi
 
 echo "--- uninstall"
 bash /dep/uninstall.sh > /tmp/uninstall.log 2>&1 || { cat /tmp/uninstall.log; bad "uninstall failed"; }
 [ ! -e /opt/antlings ] && ok "program files removed" || bad "/opt/antlings remains"
 [ ! -e /usr/local/bin/antlings ] && ok "command removed" || bad "command remains"
+[ ! -e /etc/systemd/system/antlings.service ] && ok "unit removed" || bad "unit remains"
 [ -f /etc/antlings/antlings.env ] && [ -d /var/lib/antlings ] && ok "settings and data kept without --purge" || bad "data removed without purge"
 id antlings >/dev/null 2>&1 && ok "user kept" || bad "user removed"
 bash /dep/uninstall.sh --purge > /tmp/purge.log 2>&1 || bad "purge failed"

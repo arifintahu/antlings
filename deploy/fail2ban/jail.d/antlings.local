@@ -8,5 +8,9 @@ filter   = antlings
 maxretry = 10
 findtime = 1h
 bantime  = 6h
+# Never ban yourself: add your own address or network here, for example "127.0.0.1/8 203.0.113.7".
+# The agent runs as a user on this machine and could write fake failure lines for any address. Keep your
+# own address in this list so that cannot lock you out.
+ignoreip = 127.0.0.1/8 ::1
 # Ports served by Caddy. The jail does not touch ufw.
 port     = http,https

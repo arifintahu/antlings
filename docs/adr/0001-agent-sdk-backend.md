@@ -1,6 +1,6 @@
 ---
 title: "ADR 0001: Build the backend on the Claude Agent SDK"
-status: proposed
+status: accepted
 date: 2026-10-12
 tags: [antlings, adr]
 related: [PLAN, sdk-notes]

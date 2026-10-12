@@ -21,6 +21,7 @@ CADDY_FILE=/etc/caddy/antlings.caddy
 CADDY_MAIN=/etc/caddy/Caddyfile
 F2B_FILTER=/etc/fail2ban/filter.d/antlings.conf
 F2B_JAIL=/etc/fail2ban/jail.d/antlings.local
+SSHD_CONF=/etc/ssh/sshd_config.d/antlings.conf
 
 DRY=0
 PURGE=0
@@ -40,13 +41,17 @@ while [ $# -gt 0 ]; do
 done
 if [ "$(id -u)" -ne 0 ] && [ "$DRY" -eq 0 ]; then die "run as root (sudo)"; fi
 
-backup_dir=$(find /var/backups -maxdepth 1 -type d -name 'antlings-*' 2>/dev/null | sort | tail -n 1 || true)
+STATE_DIR=/var/backups/antlings-state
+# The oldest backup holds the file as it was before Antlings.
+backup_dir=$(find /var/backups -maxdepth 1 -type d -name 'antlings-20*' 2>/dev/null | sort | head -n 1 || true)
 
-# Puts back the file install.sh replaced, or removes the file install.sh created.
+# Removes a file install.sh created, or puts back the one it replaced.
 restore_or_remove() {
   local f=$1 saved
   saved="$backup_dir/$(echo "$f" | tr / _)"
-  if [ -n "$backup_dir" ] && [ -f "$saved" ]; then run cp -a "$saved" "$f"
+  if [ -f "$STATE_DIR/created.list" ] && grep -qx "$f" "$STATE_DIR/created.list"; then
+    if [ -e "$f" ]; then run rm -f "$f"; else note "not present: $f"; fi
+  elif [ -n "$backup_dir" ] && [ -f "$saved" ]; then run cp -a "$saved" "$f"
   elif [ -e "$f" ]; then run rm -f "$f"
   else note "not present: $f"; fi
 }
@@ -63,6 +68,9 @@ fi
 step "Command"
 restore_or_remove "$BIN"
 
+step "ssh"
+restore_or_remove "$SSHD_CONF"
+
 step "fail2ban"
 restore_or_remove "$F2B_FILTER"
 restore_or_remove "$F2B_JAIL"
@@ -70,14 +78,15 @@ if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fai
 
 step "Caddy"
 if [ -e "$CADDY_FILE" ]; then
-  if grep -Eqs "import[[:space:]]+($CADDY_FILE|/etc/caddy/\*\.caddy)" "$CADDY_MAIN"; then
+  if grep -Eqs "^[[:space:]]*import[[:space:]]+($CADDY_FILE|/etc/caddy/\*\.caddy)" "$CADDY_MAIN"; then
     note "$CADDY_MAIN still imports the Antlings file. Remove that import line yourself, then validate and reload."
     note "The file $CADDY_FILE is kept until the import is gone."
   else
     restore_or_remove "$CADDY_FILE"
     if command -v caddy >/dev/null 2>&1 && systemctl is-active --quiet caddy 2>/dev/null; then
       if [ "$DRY" -eq 1 ]; then note "[dry-run] caddy validate --config $CADDY_MAIN, then systemctl reload caddy"
-      else caddy validate --config "$CADDY_MAIN" && run systemctl reload caddy; fi
+      elif caddy validate --config "$CADDY_MAIN"; then run systemctl reload caddy
+      else note "WARNING: Caddy rejects the config after removal. Fix $CADDY_MAIN before the next reload."; fi
     fi
   fi
 else
@@ -89,6 +98,7 @@ run rm -rf "$INSTALL_DIR"
 
 if [ "$PURGE" -eq 1 ]; then
   step "Purge (data and settings)"
+  note "deleting the database and the settings. Back them up first if you may need them (see the runbook)."
   run rm -rf "$DATA_DIR" "$ETC_DIR"
   note "the user $APP_USER and /home/$APP_USER are kept. Remove them by hand if you want: userdel $APP_USER"
 else

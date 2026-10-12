@@ -15,9 +15,10 @@ __DOMAIN__ {
 		-Server
 	}
 
-	# Request rate limit for sign-in and setup. Stock Caddy has no rate limiter. install.sh removes the
-	# leading "#RL " from these lines when `caddy list-modules` shows http.handlers.rate_limit
-	# (github.com/mholt/caddy-ratelimit). The app's own lockout (5 failures, 15 minutes) works without it.
+	# Request rate limit for sign-in and setup. Stock Caddy has no rate limiter, and the module
+	# (github.com/mholt/caddy-ratelimit) needs an `order rate_limit before basicauth` line in the global options.
+	# Enable it by hand, remove the leading "#RL " and run `caddy validate`. The app's own lockout
+	# (5 failures, 15 minutes) works without it.
 	#RL @auth path /api/auth/* /api/setup/*
 	#RL rate_limit @auth {
 	#RL 	zone auth {
@@ -30,7 +31,12 @@ __DOMAIN__ {
 	# WebSocket upgrades on /ws are proxied by reverse_proxy without extra settings.
 	# Caddy overwrites X-Forwarded-For with the real client address. The app trusts that header from 127.0.0.1 only.
 	# If you put Cloudflare in front, add the Cloudflare ranges with `trusted_proxies` in the global options,
-	# or every visitor shares one address and five failures lock everyone out.
+	# or every visitor shares one address and five failures lock everyone out. List only the Cloudflare ranges.
+	# Never use private_ranges or 0.0.0.0/0 there: that lets any client choose its own address.
+	# Bodies in this app are small JSON messages.
+	request_body {
+		max_size 256KB
+	}
 	reverse_proxy 127.0.0.1:3100 {
 		flush_interval -1
 	}

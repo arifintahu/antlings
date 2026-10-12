@@ -32,6 +32,7 @@ F2B_JAIL=/etc/fail2ban/jail.d/antlings.local
 PORT=3100
 MIN_FREE_MB=600
 BACKUP_DIR=/var/backups/antlings-$(date +%F)
+STATE_DIR=/var/backups/antlings-state
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 DRY=0
@@ -57,6 +58,9 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+if [ -n "$DOMAIN" ] && ! printf '%s' "$DOMAIN" | grep -qE '^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$'; then
+  die "--domain must be a plain host name such as ants.example.com"
+fi
 
 # Runs a command, or only prints it in a dry run.
 run() {
@@ -68,8 +72,13 @@ install_file() { # src dest mode owner:group
   local src=$1 dest=$2 mode=$3 owner=$4
   if [ -f "$dest" ] && cmp -s "$src" "$dest"; then note "unchanged: $dest"; return 0; fi
   if [ -e "$dest" ]; then
+    # Only a file that was not put there by this installer is worth keeping as the original.
     run mkdir -p "$BACKUP_DIR"
-    run cp -a "$dest" "$BACKUP_DIR/$(echo "$dest" | tr / _)"
+    if [ ! -e "$BACKUP_DIR/$(echo "$dest" | tr / _)" ]; then run cp -a "$dest" "$BACKUP_DIR/$(echo "$dest" | tr / _)"; fi
+  else
+    # uninstall.sh removes files listed here instead of restoring a backup
+    run mkdir -p "$STATE_DIR"
+    if [ "$DRY" -eq 0 ]; then echo "$dest" >> "$STATE_DIR/created.list"; fi
   fi
   run install -D -m "$mode" -o "${owner%%:*}" -g "${owner##*:}" "$src" "$dest"
 }
@@ -123,7 +132,7 @@ if id "$APP_USER" >/dev/null 2>&1; then
 else
   run useradd --create-home --home-dir "/home/$APP_USER" --shell /bin/bash --user-group "$APP_USER"
 fi
-if id -nG "$APP_USER" 2>/dev/null | tr ' ' '\n' | grep -qxE 'sudo|wheel|admin|root|docker'; then
+if id -nG "$APP_USER" 2>/dev/null | tr ' ' '\n' | grep -qxE 'sudo|wheel|admin|root|docker|adm|lxd|disk|shadow|systemd-journal'; then
   die "$APP_USER is in a privileged group. Remove it from sudo, wheel, admin or docker first."
 fi
 
@@ -142,10 +151,25 @@ if [ -n "$RELEASE" ]; then
   if [ -d "$target" ]; then
     note "release $id_ is already unpacked"
   else
-    run mkdir -p "$target"
-    run tar -xzf "$RELEASE" -C "$target"
-    # Code is owned by root, so the agent (running as $APP_USER) cannot change it.
-    run chown -R root:root "$target"
+    # The tarball is checked before anything is extracted as root: no links, no absolute or ".." paths.
+    if [ -f "$RELEASE" ]; then
+      if [ -f "$RELEASE.sha256" ]; then
+        note "checking $RELEASE.sha256"
+        (cd "$(dirname "$RELEASE")" && sha256sum -c "$(basename "$RELEASE").sha256") || die "checksum does not match"
+      else
+        note "no $(basename "$RELEASE").sha256 next to the tarball: its origin is not checked"
+      fi
+      if tar -tzvf "$RELEASE" | grep -qE '^[lh]'; then die "the release contains links; refusing to extract it"; fi
+      if tar -tzf "$RELEASE" | grep -qE '(^/|(^|/)\.\.(/|$))'; then die "the release contains absolute or .. paths; refusing to extract it"; fi
+    fi
+    # Extract into a temporary folder, fix modes, then move into place, so a failed extraction never looks installed.
+    run rm -rf "$target.tmp"
+    run mkdir -p "$target.tmp"
+    run tar -xzf "$RELEASE" --no-same-owner --no-same-permissions -C "$target.tmp"
+    run chown -R root:root "$target.tmp"
+    # Nothing in the code tree may be writable by the antlings user (the agent) or carry setuid bits.
+    run chmod -R go-w,u-s,g-s,a-t "$target.tmp"
+    run mv -T "$target.tmp" "$target"
   fi
   if [ -L "$INSTALL_DIR/current" ]; then
     prev=$(readlink "$INSTALL_DIR/current")
@@ -159,15 +183,20 @@ fi
 
 # ---------------------------------------------------------------- 5. env file
 step "Settings file"
+origin="http://localhost:$PORT"
+if [ -n "$DOMAIN" ]; then origin="https://$DOMAIN"; fi
 if [ -f "$ENV_FILE" ]; then
   note "$ENV_FILE exists and is left as it is"
+  if ! grep -qx "ANTLINGS_ORIGIN=$origin" "$ENV_FILE"; then
+    note "WARNING: ANTLINGS_ORIGIN in the file differs from $origin."
+    note "         Browsers on another origin are refused. Edit the line and restart antlings if the address changed."
+  fi
 else
-  origin="http://localhost:$PORT"
-  if [ -n "$DOMAIN" ]; then origin="https://$DOMAIN"; fi
   claude_path=$(command -v claude 2>/dev/null || true)
   if [ "$DRY" -eq 1 ]; then
     note "[dry-run] would write $ENV_FILE (mode 640, root:$APP_USER) with ANTLINGS_ORIGIN=$origin and generated secrets"
   else
+    env_tmp=$(mktemp "$ETC_DIR/.env.XXXXXX")
     (
       umask 077
       {
@@ -182,18 +211,31 @@ else
         echo "ANTLINGS_AUTH_MODE=apikey"
         echo "ANTLINGS_MAX_SESSIONS=2"
         echo "ANTLINGS_MAX_SUBAGENTS=3"
-        echo "# Set your API key on the next line, then: systemctl restart antlings"
+        echo "# Set a dedicated API key with a spend cap on the next line, then: systemctl restart antlings"
         echo "# ANTHROPIC_API_KEY="
         "$NODE_BIN" "$INSTALL_DIR/current/app/dist/cli.js" gen-env
-      } > "$ENV_FILE"
-    )
-    chown "root:$APP_USER" "$ENV_FILE"
-    chmod 640 "$ENV_FILE"
+      } > "$env_tmp"
+    ) || { rm -f "$env_tmp"; die "could not generate the settings file"; }
+    grep -q '^ANTLINGS_SECRET_KEY=' "$env_tmp" || { rm -f "$env_tmp"; die "generated settings have no secret key"; }
+    chown "root:$APP_USER" "$env_tmp"
+    chmod 640 "$env_tmp"
+    mv -T "$env_tmp" "$ENV_FILE"
     note "wrote $ENV_FILE (secrets generated, not shown)"
   fi
 fi
 
 # ---------------------------------------------------------------- 6. command, unit, fail2ban
+step "No ssh login for the service user"
+if [ -d /etc/ssh/sshd_config.d ]; then
+  sshd_tmp=$(mktemp)
+  printf '# Antlings: the service user (and the agent that runs as it) must not log in over ssh.\nDenyUsers %s\n' "$APP_USER" > "$sshd_tmp"
+  install_file "$sshd_tmp" /etc/ssh/sshd_config.d/antlings.conf 644 root:root
+  rm -f "$sshd_tmp"
+  note "reload sshd yourself when convenient: systemctl reload ssh   (not done here, to keep your session safe)"
+else
+  note "no /etc/ssh/sshd_config.d: skipped. Make sure $APP_USER cannot log in over ssh."
+fi
+
 step "Command and service"
 wrapper=$(mktemp)
 trap 'rm -f "$wrapper"' EXIT
@@ -210,7 +252,11 @@ step "fail2ban"
 if [ -d /etc/fail2ban ]; then
   install_file "$HERE/fail2ban/filter.d/antlings.conf" "$F2B_FILTER" 644 root:root
   install_file "$HERE/fail2ban/jail.d/antlings.local" "$F2B_JAIL" 644 root:root
-  if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fail2ban 2>/dev/null; then run fail2ban-client reload; else note "fail2ban is not running: files installed, no reload"; fi
+  if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fail2ban 2>/dev/null; then
+    if [ "$DRY" -eq 1 ]; then note "[dry-run] fail2ban-client reload"; elif ! fail2ban-client reload; then
+      note "WARNING: fail2ban could not reload. The Antlings jail may be wrong (needs python-systemd for backend=systemd). Other jails are unchanged."
+    fi
+  else note "fail2ban is not running: files installed, no reload"; fi
 else
   note "fail2ban is not installed: skipped. Install it and run this script again to add the jail."
 fi
@@ -225,26 +271,42 @@ elif ! command -v caddy >/dev/null 2>&1; then
 else
   dns_ok=1
   if [ "$SKIP_DNS" -eq 0 ]; then
-    resolved=$(dig +short A "$DOMAIN" 2>/dev/null | tail -n 1 || true)
-    if [ -z "$resolved" ]; then dns_ok=0; note "DNS: $DOMAIN does not resolve yet"
-    elif ! ip -4 -o addr show 2>/dev/null | grep -qw "$resolved"; then dns_ok=0; note "DNS: $DOMAIN resolves to $resolved, which is not an address of this machine"; fi
+    if ! command -v dig >/dev/null 2>&1; then
+      dns_ok=0; note "dig is not installed, so DNS cannot be checked"
+    else
+      resolved=$(dig +short A -- "$DOMAIN" 2>/dev/null | grep -E '^[0-9.]+$' || true)
+      if [ -z "$resolved" ]; then dns_ok=0; note "DNS: $DOMAIN does not resolve yet"
+      else
+        dns_ok=0
+        for ip4 in $resolved; do
+          if ip -4 -o addr show 2>/dev/null | grep -qw "$ip4"; then dns_ok=1; fi
+        done
+        if [ "$dns_ok" -eq 0 ]; then note "DNS: $DOMAIN resolves to $(echo "$resolved" | tr '\n' ' '), none is an address of this machine"; fi
+      fi
+    fi
   fi
   if [ "$dns_ok" -eq 0 ]; then
     note "Caddy is not touched. Point the DNS A record here, then run this script again (or add --skip-dns-check behind NAT)."
   else
     snippet=$(mktemp)
     sed "s/__DOMAIN__/$DOMAIN/g" "$HERE/Caddyfile.snippet" > "$snippet"
-    if caddy list-modules 2>/dev/null | grep -q 'http.handlers.rate_limit'; then
-      sed -i 's/^\t#RL /\t/' "$snippet"
-      note "rate limit module found: request rate limit enabled for /api/auth and /api/setup"
-    else
-      note "rate limit module not found: only the app's own lockout applies"
-    fi
+    # The optional rate limit block stays commented. It needs the caddy-ratelimit module and an `order` line
+    # in the global options, so it is enabled by hand (see the runbook).
+    caddy_had_old=0
+    if [ -e "$CADDY_FILE" ]; then caddy_had_old=1; fi
     install_file "$snippet" "$CADDY_FILE" 644 root:root
     rm -f "$snippet"
     if grep -Eqs '^[[:space:]]*import[[:space:]]+(/etc/caddy/antlings\.caddy|/etc/caddy/\*\.caddy)' "$CADDY_MAIN"; then
       if [ "$DRY" -eq 1 ]; then note "[dry-run] caddy validate --config $CADDY_MAIN, then systemctl reload caddy"; else
-        caddy validate --config "$CADDY_MAIN" || die "Caddy rejected the config. $CADDY_FILE was written; the main Caddyfile is untouched and Caddy was not reloaded."
+        if ! caddy validate --config "$CADDY_MAIN"; then
+          # The main Caddyfile already imports this file. Leaving a broken one would break every site on the next reload.
+          if [ "$caddy_had_old" -eq 1 ] && [ -f "$BACKUP_DIR/$(echo "$CADDY_FILE" | tr / _)" ]; then
+            cp -a "$BACKUP_DIR/$(echo "$CADDY_FILE" | tr / _)" "$CADDY_FILE"
+          else
+            rm -f "$CADDY_FILE"
+          fi
+          die "Caddy rejected the config. $CADDY_FILE was put back as it was; Caddy was not reloaded."
+        fi
         caddy_reload=1
       fi
     else
@@ -259,6 +321,7 @@ if [ "$caddy_reload" -eq 1 ]; then run systemctl reload caddy; fi
 # ---------------------------------------------------------------- 8. start
 step "Start"
 if [ -n "$RELEASE" ]; then
+  note "restarting the service ends running Claude Code sessions. They resume on the next message."
   run systemctl restart antlings
 else
   run systemctl start antlings
@@ -271,6 +334,12 @@ if [ "$DRY" -eq 0 ]; then
   done
   if [ "$ok" -eq 1 ]; then note "health check passed on 127.0.0.1:$PORT"; else
     note "the service did not answer /health. See: journalctl -u antlings -n 50"
+    if [ -n "$RELEASE" ] && [ -L "$INSTALL_DIR/previous" ]; then
+      note "rolling back to the previous release"
+      ln -sfn "$(readlink "$INSTALL_DIR/previous")" "$INSTALL_DIR/current.new"
+      mv -T "$INSTALL_DIR/current.new" "$INSTALL_DIR/current"
+      systemctl restart antlings || true
+    fi
     exit 1
   fi
   systemctl show antlings -p MemoryCurrent | sed 's/^/    /'

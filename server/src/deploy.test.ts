@@ -8,7 +8,7 @@ describe('fail2ban filter', () => {
   const conf = file('fail2ban/filter.d/antlings.conf');
   const failregex = /^failregex\s*=\s*(.+)$/m.exec(conf)![1]!;
   // fail2ban's <HOST> becomes a captured address group
-  const re = new RegExp(failregex.replace('<HOST>', '(?<host>[0-9a-fA-F:.]+)'));
+  const re = new RegExp(failregex.replace('<ADDR>', '(?<host>[0-9a-fA-F:.]+)'));
 
   it('matches the line the service really writes, with and without a journald prefix', async () => {
     const kit = await makeKit();
@@ -47,6 +47,9 @@ describe('systemd unit', () => {
     'ReadWritePaths=/var/lib/antlings /home/antlings',
     'PrivateTmp=yes',
     'MemoryHigh=800M',
+    'MemoryMax=1100M',
+    'ProtectProc=invisible',
+    'RestrictSUIDSGID=yes',
     'Restart=on-failure',
     'EnvironmentFile=/etc/antlings/antlings.env',
   ])('has %s', (line) => {

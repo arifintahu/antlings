@@ -1,6 +1,6 @@
 ---
 title: "ADR 0002: Authentication and trust boundary"
-status: proposed
+status: accepted
 date: 2026-10-12
 tags: [antlings, adr, security]
 related: [PLAN, 0001-agent-sdk-backend]

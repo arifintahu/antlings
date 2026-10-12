@@ -15,7 +15,7 @@ Everything here runs on the VPS as a sudo-capable user. Replace `$VPS_HOST` with
 | Program (read-only, root-owned) | `/opt/antlings/current` (link to `/opt/antlings/releases/<id>`) |
 | Previous release for rollback | `/opt/antlings/previous` |
 | Database and event log | `/var/lib/antlings/antlings.db` (plus `-wal` and `-shm`) |
-| Settings and secrets | `/etc/antlings/antlings.env` (mode 640, `root:antlings`) |
+| Settings and secrets | `/etc/antlings/antlings.env` (mode 640, `root:antlings`). Readable by the `antlings` user, and so by the agent. See "Known limits". |
 | Service | `antlings.service` |
 | Command | `/usr/local/bin/antlings` (run it as the service user) |
 | Sessions and projects | `/home/antlings` (the folder picker's root; Claude transcripts are in `~/.claude`) |
@@ -30,15 +30,17 @@ On your own machine (needs Docker, runs nothing on the VPS):
 ./deploy/container-test.sh dist-release/antlings-*.tar.gz   # optional: runs install and uninstall in a throwaway container
 ```
 
-Copy the tarball and the `deploy` folder to the VPS (the tarball contains `deploy/` too). On the VPS:
+Copy the tarball and its `.sha256` file to a folder that only root can write on the VPS, for example `/root/antlings-release` (never `/tmp` or `/home/antlings`, where the agent could swap files before a root install). The tarball contains `deploy/` too. On the VPS:
 
 ```bash
-tar -xzf antlings-<version>.tar.gz deploy
+sudo mkdir -p /root/antlings-release && cd /root/antlings-release     # put the two files here first
+sha256sum -c antlings-<version>.tar.gz.sha256                          # compare with the value printed on your build machine
+sudo tar -xzf antlings-<version>.tar.gz deploy
 sudo ./deploy/install.sh --dry-run --release antlings-<version>.tar.gz --domain ants.example.com   # read the output first
 sudo ./deploy/install.sh --release antlings-<version>.tar.gz --domain ants.example.com
 ```
 
-Leave out `--domain` to keep the service on `127.0.0.1:3100` only. The installer checks 600 MB of free memory, makes a backup of every file it replaces, and never touches ufw, Postgres, Redis, sudoers, other services or the main Caddyfile.
+Leave out `--domain` to keep the service on `127.0.0.1:3100` only. The installer checks 600 MB of free memory, refuses a tarball that contains links or unsafe paths, backs up every system file it replaces (the first copy is kept), and never touches ufw, Postgres, Redis, sudoers, other services or the main Caddyfile. If the new release does not answer `/health` it switches back to the previous one. It also adds `DenyUsers antlings` for ssh in `/etc/ssh/sshd_config.d/antlings.conf` (run `systemctl reload ssh` yourself afterwards).
 
 After the first install you do three things yourself:
 
@@ -83,33 +85,31 @@ curl -s http://127.0.0.1:3100/health          # {"ok":true}
 The database holds your passkeys, sessions, audit log and the event log of every conversation. Transcripts live separately in `/home/antlings/.claude/projects`.
 
 ```bash
-# backup (safe while running: SQLite online backup)
-sudo -u antlings sqlite3 /var/lib/antlings/antlings.db ".backup '/var/lib/antlings/backup-$(date +%F).db'"
-# or stop the service and copy the three files
+# backup into a folder only root can write (the agent can change files in /var/lib/antlings)
+sudo install -d -m 700 /root/antlings-backup
 sudo systemctl stop antlings
-sudo cp -a /var/lib/antlings/antlings.db* /root/antlings-backup/
+sudo cp -a --no-dereference /var/lib/antlings/antlings.db /root/antlings-backup/antlings-$(date +%F).db
 sudo systemctl start antlings
 
-# restore
+# restore. Run the copy as the service user and replace the file, never follow a link:
 sudo systemctl stop antlings
-sudo cp /root/antlings-backup/antlings.db /var/lib/antlings/antlings.db
-sudo rm -f /var/lib/antlings/antlings.db-wal /var/lib/antlings/antlings.db-shm
-sudo chown antlings:antlings /var/lib/antlings/antlings.db && sudo chmod 600 /var/lib/antlings/antlings.db
+sudo -u antlings rm -f /var/lib/antlings/antlings.db /var/lib/antlings/antlings.db-wal /var/lib/antlings/antlings.db-shm
+sudo install -m 600 -o antlings -g antlings /root/antlings-backup/antlings-<date>.db /var/lib/antlings/antlings.db
 sudo systemctl start antlings
 ```
 
-If `sqlite3` is not installed, use the stop-and-copy method.
+Stopping the service first gives a consistent copy without extra tools.
 
 ## Update and roll back
 
 ```bash
 sudo ./deploy/install.sh --release antlings-<new>.tar.gz     # unpacks next to the old one, switches the link, restarts
-# roll back
-sudo ln -sfn "$(readlink /opt/antlings/previous)" /opt/antlings/current.new && sudo mv -T /opt/antlings/current.new /opt/antlings/current
+# roll back (only if /opt/antlings/previous exists)
+test -L /opt/antlings/previous && sudo ln -sfn "$(readlink /opt/antlings/previous)" /opt/antlings/current.new && sudo mv -T /opt/antlings/current.new /opt/antlings/current
 sudo systemctl restart antlings
 ```
 
-The database schema only gets new tables with `CREATE TABLE IF NOT EXISTS`, so an older release can read a newer database. Back up before an update anyway.
+Back up the database before an update. v0.1 only adds tables, but a later release may change columns, and then an older release cannot read the new database.
 
 Test a new Agent SDK version with `spikes/sdk-spike.mjs` and `ANTLINGS_LIVE=1 pnpm --filter @antlings/server test` before building a release. The SDK version is pinned.
 
@@ -127,7 +127,7 @@ This removes every passkey, the password fallback and every sign-in, then prints
 |---|---|
 | Passkeys | Security page: add the new one, then remove the old one (both ask for a fresh check) |
 | Password and authenticator | Security page: replace password and code |
-| `ANTLINGS_SECRET_KEY` (encrypts the authenticator secret) | `reset-access`, then set up the fallback again. Edit the env file only after that, because the old secret can no longer be decrypted. Generate a value with `sudo -u antlings antlings gen-env` and copy only the `ANTLINGS_SECRET_KEY` line. |
+| `ANTLINGS_SECRET_KEY` (encrypts the authenticator secret) | 1. Run `sudo -u antlings antlings reset-access` (removes the stored authenticator). 2. Edit the env file and restart. 3. Register again with the new setup code and set up the fallback again. The old secret cannot decrypt anything afterwards. Generate a value with `sudo -u antlings antlings gen-env | grep ^ANTLINGS_SECRET_KEY=` (this prints one secret line; do it on a private terminal). |
 | VAPID keys (push) | Replace both `ANTLINGS_VAPID_*` lines with the output of `antlings gen-env`, restart, then turn push notifications off and on again on each device |
 | Anthropic API key | Edit `ANTHROPIC_API_KEY` in the env file, `sudo systemctl restart antlings` |
 
@@ -149,6 +149,8 @@ The memory limit is `MemoryHigh=800M` in `/etc/systemd/system/antlings.service`.
 
 ## fail2ban
 
+Set `ignoreip` in `/etc/fail2ban/jail.d/antlings.local` to your own address first.
+
 ```bash
 sudo fail2ban-client status antlings
 sudo fail2ban-client set antlings unbanip 203.0.113.9
@@ -161,13 +163,15 @@ The app already blocks an address for 15 minutes after 5 failures (`journalctl -
 ```bash
 sudo ./deploy/uninstall.sh --dry-run
 sudo ./deploy/uninstall.sh            # keeps the database, settings and the antlings user
-sudo ./deploy/uninstall.sh --purge    # also deletes /var/lib/antlings and /etc/antlings
+sudo ./deploy/uninstall.sh --purge    # also deletes /var/lib/antlings and /etc/antlings. Back them up first
 ```
 
 If the main Caddyfile still imports `antlings.caddy`, remove that line yourself first.
 
 ## Known limits
 
-- The service and the agent run as the same Unix user. Read the first item in the threat model of [[0002-authentication-and-trust-boundary]] before using Bypass mode.
+- **The agent can read what the service can read.** The service and the agent run as the same Unix user, so a prompt-injected agent can read `/etc/antlings/antlings.env` (secret key, VAPID key, API key), the database, and `~/.claude/.credentials.json`, and can run `antlings reset-access`. Approvals and step-up protect against a stolen browser session, not against the agent. Use a dedicated API key with a spend cap, keep Bypass mode rare, and read the first item in the threat model of [[0002-authentication-and-trust-boundary]].
+- The agent can reach every service on `127.0.0.1` (Postgres, Redis, the other Node services) and the cloud metadata address. `ufw` does not cover that. A firewall rule that rejects traffic from the `antlings` user to those ports is the fix, for example with nftables `meta skuid antlings`. It is not part of the installer because it must match your other services.
+- fail2ban counts log lines, and the agent can write log lines. The jail has an `ignoreip` list for that reason. Put your own address in it.
 - Event logs grow with use. Delete a session in the app to remove its log and transcript.
 - Plan usage needs a subscription login. With an API key the meter shows "unavailable".
