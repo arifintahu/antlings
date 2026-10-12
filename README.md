@@ -20,8 +20,6 @@ The Security page: passkeys, signed-in devices, notifications, server status and
 
 Claude Code works like a colony. One agent takes your request and breaks it up, then hands the pieces to helpers that go off and do them. In a terminal that looks like a scroll of text. You cannot tell which helper is stuck, which one is waiting for a yes from you, and which one has finished.
 
-The first version of this idea was a remote desktop in a browser. It worked, but it spent memory on a whole desktop and a browser tab that the job never needed, on a server with 2 GB. All the job really needs is: start a session, watch it, approve or deny what it wants to do, and come back later. So Antlings is only that, in about 100 MB.
-
 Ants fit because they do the same thing at a small scale. Many tiny workers, each with one job, coordinated by one that knows the plan. So:
 
 - The **lead ant** wears a crown and sits at the main desk for the session. It has a name, such as Eli, Ana or Zed.
