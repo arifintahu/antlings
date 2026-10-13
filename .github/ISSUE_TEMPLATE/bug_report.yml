@@ -1,0 +1,61 @@
+name: Bug report
+description: Something does not work as the README or docs say
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste API keys, setup codes, the contents of `/etc/antlings/antlings.env`, or server addresses you want to keep private. For security problems, use private reporting instead of this form.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Antlings version
+      description: Shown on the Security page under Server status.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it run
+      options:
+        - Deployed with deploy/install.sh
+        - Local dev server
+        - Local dev server with the fake agent
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Server OS, Node version and browser
+      placeholder: Ubuntu 24.04, Node 24, Chrome on Android
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Claude login mode
+      options:
+        - API key (default)
+        - Subscription
+        - Not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: '`sudo journalctl -u antlings -n 100 --no-pager`, or the browser console. Remove anything private.'
+      render: text
