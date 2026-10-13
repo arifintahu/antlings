@@ -60,16 +60,23 @@ You need Node 22 or newer and [pnpm](https://pnpm.io) 9. This runs the whole app
 git clone https://github.com/arifintahu/antlings.git
 cd antlings
 pnpm install
+pnpm build                                                  # builds the shared package the server imports
 pnpm --filter @antlings/server exec tsx src/e2e/server.ts   # http://localhost:3199
 ```
 
 To run it against real Claude Code on your own machine, set `ANTHROPIC_API_KEY` (see [Claude login](#claude-login)):
 
 ```bash
-cp .env.example .env     # fill in ANTLINGS_SECRET_KEY, see the comment in the file
 pnpm build
-pnpm --filter @antlings/server dev                          # http://localhost:3100
-pnpm --filter @antlings/server exec tsx src/cli.ts setup    # prints a one-time setup code
+cp .env.example .env                  # then add ANTHROPIC_API_KEY=... to it
+node server/dist/cli.js gen-env       # prints three secret lines; paste them over the empty ANTLINGS_SECRET_KEY, ANTLINGS_VAPID_PUBLIC and ANTLINGS_VAPID_PRIVATE lines in .env
+pnpm --filter @antlings/server dev    # http://localhost:3100
+```
+
+In a second terminal, print the one-time setup code:
+
+```bash
+ANTLINGS_ENV_FILE=../.env pnpm --filter @antlings/server exec tsx src/cli.ts setup
 ```
 
 Open the page, enter the setup code, and register your passkey.
