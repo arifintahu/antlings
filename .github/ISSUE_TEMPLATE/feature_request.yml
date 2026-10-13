@@ -23,4 +23,4 @@ body:
   - type: markdown
     attributes:
       value: |
-        Antlings is built for one owner on one small server. Changes to sign-in, the trust boundary or the stack are discussed in an issue first, see [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md).
+        Antlings is built for one owner on one small server. Changes to sign-in, the trust boundary or the stack are discussed in an issue first, see [CONTRIBUTING.md](https://github.com/arifintahu/antlings/blob/main/CONTRIBUTING.md).
