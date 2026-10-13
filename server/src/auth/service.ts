@@ -384,9 +384,11 @@ export class Auth {
   }
 
   async totpLogin(pendingId: string, code: string, ip: string, ua: string): Promise<NewSession | null> {
-    const p = this.db.prepare('SELECT ip, expires_at FROM pending_logins WHERE id = ?').get(pendingId) as
-      { ip: string; expires_at: number } | undefined;
-    if (!p || p.expires_at < this.clock.now() || p.ip !== ip) {
+    // Not bound to the address of the password step: a phone on a mobile network can leave from another exit
+    // address a few seconds later. The id is random, single use, valid for 5 minutes and allows 3 wrong codes.
+    const p = this.db.prepare('SELECT expires_at FROM pending_logins WHERE id = ?').get(pendingId) as
+      { expires_at: number } | undefined;
+    if (!p || p.expires_at < this.clock.now()) {
       this.recordFailure(ip, 'pending');
       return null;
     }

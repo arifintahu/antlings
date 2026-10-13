@@ -486,6 +486,25 @@ describe('password and one-time code', () => {
     expect(replay.statusCode).toBe(401);
   });
 
+  it('accepts the code from another address, as on a mobile network whose exit address changes', async () => {
+    await withFallback();
+    const p = (
+      await kit.call({
+        method: 'POST',
+        url: '/api/auth/password',
+        remoteAddress: '203.0.113.83',
+        payload: { password: 'correct horse battery' },
+      })
+    ).json();
+    const ok = await kit.call({
+      method: 'POST',
+      url: '/api/auth/totp',
+      remoteAddress: '203.0.113.84',
+      payload: { pendingId: p.pendingId, code: kit.auth.currentTotpForTest() },
+    });
+    expect(ok.statusCode).toBe(200);
+  });
+
   it('rejects a wrong password and a wrong code', async () => {
     await withFallback();
     const wrong = await kit.call({
