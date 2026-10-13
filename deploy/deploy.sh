@@ -20,8 +20,7 @@ REMOTE_DIR=/root/antlings-release
 
 echo "==> Building the release"
 bash "$ROOT/deploy/build-release.sh" > /tmp/antlings-build.log 2>&1 || { tail -20 /tmp/antlings-build.log; exit 1; }
-TAR=$(find "$ROOT/dist-release" -maxdepth 1 -name '*.tar.gz' -printf '%T@ %p
-' | sort -n | tail -n 1 | cut -d' ' -f2-)
+TAR=$(ls -t "$ROOT"/dist-release/*.tar.gz | head -n 1)
 NAME=$(basename "$TAR")
 echo "    $NAME ($(du -h "$TAR" | cut -f1)), sha256 $(cut -c1-12 "$TAR.sha256")..."
 
