@@ -40,6 +40,7 @@ Phone / laptop (PWA)
 
 - **Sessions stay in Claude Code's own transcripts.** Antlings stores only auth data, an event log for replay, and flags such as archived or pinned. Deleting a session removes both.
 - **One process per running session.** Each running session is a Claude Code process of about 200 MB, so `ANTLINGS_MAX_SESSIONS` defaults to 2. Idle sessions are closed and resumed on the next message.
+- **Logins happen in the browser.** `server/src/connections/` runs `gh auth login --web` or `claude auth login` as the service user, one at a time, and passes only a login URL, a device code and a phase to the page. A pasted Claude code goes to the child's stdin. The page polls `GET /api/connections` while a login runs. A pasted API key is encrypted in the `settings` table, and the SDK environment reads the stored mode and key before the env file.
 - **The backend binds to 127.0.0.1.** A reverse proxy such as Caddy provides TLS.
 - **Sprites are code, not images.** The ants are drawn on a 32x28 canvas and scaled by whole numbers. Every state also has a text label, and animation stops when `prefers-reduced-motion` is set.
 - **Security model.** See [ADR 0002](adr/0002-authentication-and-trust-boundary.md) for sign-in, step-up checks, lockout and the trust boundary, and [ADR 0003](adr/0003-claude-login-terms.md) for API key versus subscription login.

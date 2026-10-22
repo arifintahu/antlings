@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Connections page: connect GitHub (device-flow sign-in through `gh`, `gh auth setup-git`, git name and email) and Claude (paste an API key, or relay the `claude` sign-in for subscription use) from the browser, with no SSH after install. Every change needs a fresh check and is audited.
+- `deploy/install.sh` installs the GitHub CLI with `apt-get` (skip with `--no-gh`), and its next steps now point to the Connections page.
+- `ANTLINGS_GH_PATH` setting for a `gh` that is not on the service's `PATH`.
+
 ## [0.1.0] - 2026-10-13
 
 First public release.
