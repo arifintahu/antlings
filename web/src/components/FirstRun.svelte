@@ -135,6 +135,11 @@
   async function finish() {
     await app.signedIn(csrf);
   }
+
+  async function finishToConnections() {
+    await app.signedIn(csrf);
+    app.connectionsOpen = true;
+  }
 </script>
 
 <section class="login" aria-labelledby="fr-title">
@@ -196,7 +201,8 @@
         </form>
       {/if}
     {:else}
-      <button class="btn primary wide" type="button" onclick={finish}>Open Antlings</button>
+      <button class="btn primary wide" type="button" onclick={finishToConnections}>Connect Claude and GitHub</button>
+      <button class="link" type="button" onclick={finish}>Open Antlings. I will connect them later.</button>
     {/if}
 
     <div class="lg-msg" class:err={isErr} role={isErr ? 'alert' : 'status'} aria-live="polite">{msg}</div>

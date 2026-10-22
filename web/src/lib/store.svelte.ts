@@ -54,6 +54,7 @@ export type Screen = 'boot' | 'login' | 'firstrun' | 'app';
 class AppStore {
   screen = $state<Screen>('boot');
   securityOpen = $state(false);
+  connectionsOpen = $state(false);
   sessions = $state<SessionSummary[]>([]);
   listView = $state<'active' | 'archived'>('active');
   views = $state<Record<string, SessionView>>({});
@@ -145,6 +146,7 @@ class AppStore {
     this.sessions = [];
     this.activeId = null;
     this.securityOpen = false;
+    this.connectionsOpen = false;
     this.screen = 'login';
   }
 

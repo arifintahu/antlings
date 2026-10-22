@@ -8,6 +8,7 @@
   import Conversation from './Conversation.svelte';
   import NewSession from './NewSession.svelte';
   import Office from './Office.svelte';
+  import Connections from './Connections.svelte';
   import Security from './Security.svelte';
   import SessionSettings from './SessionSettings.svelte';
   import Sidebar from './Sidebar.svelte';
@@ -122,6 +123,7 @@
     menuOpen = false;
     ctxOpen = false;
     if (app.securityOpen && !document.querySelector('dialog[open]')) app.securityOpen = false;
+    if (app.connectionsOpen && !document.querySelector('dialog[open]')) app.connectionsOpen = false;
   }
 
   function outside(ev: MouseEvent) {
@@ -178,7 +180,7 @@
 
 <svelte:window onkeydown={esc} onclick={outside} />
 
-<div class="app" inert={app.securityOpen}>
+<div class="app" inert={app.securityOpen || app.connectionsOpen}>
   <Sidebar
     open={drawer}
     inert={!desktop && !drawer}
@@ -190,6 +192,10 @@
     onsecurity={() => {
       drawer = false;
       app.securityOpen = true;
+    }}
+    onconnections={() => {
+      drawer = false;
+      app.connectionsOpen = true;
     }}
   />
   <button class="scrim" class:show={drawer && !desktop} aria-label="Close sessions" tabindex="-1" onclick={() => (drawer = false)}></button>
@@ -311,6 +317,7 @@
 <NewSession open={newOpen} onclose={() => (newOpen = false)} />
 <SessionSettings open={settingsOpen} onclose={() => (settingsOpen = false)} />
 {#if app.securityOpen}<Security onclose={() => (app.securityOpen = false)} />{/if}
+{#if app.connectionsOpen}<Connections onclose={() => (app.connectionsOpen = false)} />{/if}
 
 <dialog bind:this={delDlg} aria-labelledby="dlg-h" onclose={() => (confirmDelete = false)}>
   <h2 id="dlg-h">Delete session?</h2>

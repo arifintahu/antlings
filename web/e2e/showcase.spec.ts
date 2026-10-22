@@ -41,3 +41,15 @@ test('phone screenshots', async ({ page }) => {
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}phone-sessions.png` });
 });
+
+test('connections screenshot', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 920 });
+  await page.request.post('http://localhost:3199/__e2e/connections-reset', {
+    headers: { origin: 'http://localhost:3199' },
+  });
+  await page.getByRole('button', { name: 'Connections' }).click();
+  await page.getByRole('button', { name: 'Connect GitHub' }).click();
+  await expect(page.getByLabel('One-time code')).toBeVisible();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}desktop-connections.png` });
+});

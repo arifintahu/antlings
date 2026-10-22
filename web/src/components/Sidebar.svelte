@@ -12,7 +12,15 @@
     onnew,
     onclose,
     onsecurity,
-  }: { open: boolean; inert: boolean; onnew: () => void; onclose: () => void; onsecurity: () => void } = $props();
+    onconnections,
+  }: {
+    open: boolean;
+    inert: boolean;
+    onnew: () => void;
+    onclose: () => void;
+    onsecurity: () => void;
+    onconnections: () => void;
+  } = $props();
 
   const archivedView = $derived(app.listView === 'archived');
   const nActive = $derived(app.sessions.filter((s) => !s.archived).length);
@@ -127,6 +135,7 @@
       {/each}
     </section>
     <div class="foot-links">
+      <button class="link" type="button" onclick={onconnections}>Connections</button>
       <button class="link" type="button" onclick={onsecurity}>Security</button>
       <button class="link" type="button" onclick={() => app.signOut()}>Sign out</button>
     </div>
