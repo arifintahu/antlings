@@ -1,6 +1,9 @@
+import { homedir } from 'node:os';
 import { buildApp } from './app.js';
 import { sdkAgentFactory } from './agent.js';
 import { Auth } from './auth/service.js';
+import { Connections } from './connections/service.js';
+import { ConnectionSettings } from './connections/store.js';
 import { realWebAuthn } from './auth/webauthn.js';
 import { dbPath, loadConfig } from './config.js';
 import { openDb } from './db.js';
@@ -17,6 +20,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const db = openDb(dbPath(config));
   const auth = new Auth(db, systemClock, config, realWebAuthn(config.rpId, config.origin));
+  const settings = new ConnectionSettings(auth);
   const folders = new Folders(config.home);
   const repaired = repairStoredHistory(db);
   if (repaired > 0) console.error(`repaired ${repaired} stored history events`);
@@ -26,15 +30,23 @@ async function main(): Promise<void> {
     db,
     clock: systemClock,
     config,
-    agents: sdkAgentFactory(config),
+    agents: sdkAgentFactory(config, () => ({ mode: settings.mode(), apiKey: settings.apiKey() })),
     transcripts: sdkTranscripts,
     audit: (kind, detail) => auth.audit(kind, undefined, detail),
     notifier: push,
   });
+  const connections = new Connections({
+    auth,
+    settings,
+    gh: { cmd: config.ghPath ?? 'gh' },
+    claude: { cmd: config.claudePath ?? 'claude' },
+    home: homedir(),
+    clock: systemClock,
+  });
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, push });
+      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, connections, push });
     },
   });
   const reaper = setInterval(() => mgr.reapIdle(), 60_000);

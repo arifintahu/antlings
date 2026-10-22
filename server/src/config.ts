@@ -10,6 +10,7 @@ const Env = z.object({
   ANTLINGS_SECRET_KEY: z.string().optional(),
   ANTLINGS_HOME: z.string().optional(),
   ANTLINGS_CLAUDE_PATH: z.string().optional(),
+  ANTLINGS_GH_PATH: z.string().optional(),
   ANTLINGS_AUTH_MODE: z.enum(['apikey', 'subscription']).default('apikey'),
   ANTLINGS_SUBSCRIPTION_OK: z.enum(['0', '1']).default('0'),
   ANTLINGS_MAX_SESSIONS: z.coerce.number().int().min(1).max(8).default(2),
@@ -31,6 +32,7 @@ export interface Config {
   secretKey: Buffer;
   home: string;
   claudePath?: string;
+  ghPath?: string;
   authMode: 'apikey' | 'subscription';
   maxSessions: number;
   maxSubagents: number;
@@ -64,6 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     secretKey: key,
     home: resolve(e.ANTLINGS_HOME ?? homedir()),
     claudePath: e.ANTLINGS_CLAUDE_PATH,
+    ghPath: e.ANTLINGS_GH_PATH,
     authMode: e.ANTLINGS_AUTH_MODE,
     maxSessions: e.ANTLINGS_MAX_SESSIONS,
     maxSubagents: e.ANTLINGS_MAX_SUBAGENTS,

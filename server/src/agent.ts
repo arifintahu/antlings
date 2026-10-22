@@ -7,6 +7,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { PermissionMode } from '@antlings/shared';
 import type { Config } from './config.js';
+import type { ClaudeMode } from './connections/store.js';
 
 export type { ModelInfo, SDKMessage };
 
@@ -98,19 +99,27 @@ const ENV_ALLOW = [
   'NODE_EXTRA_CA_CERTS',
 ];
 
+/** The Claude sign-in choice stored through the Connections page. It wins over the env file. */
+export interface ClaudeAuthSource {
+  mode: ClaudeMode;
+  apiKey?: string;
+}
+
 export function sdkEnv(
   config: Config,
   source: NodeJS.ProcessEnv = process.env,
+  stored?: ClaudeAuthSource,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const k of ENV_ALLOW) env[k] = source[k];
   for (const [k, v] of Object.entries(source)) if (/^(CLAUDE_|HTTPS?_PROXY$|NO_PROXY$)/i.test(k)) env[k] = v;
-  if (config.authMode === 'apikey') env.ANTHROPIC_API_KEY = source.ANTHROPIC_API_KEY;
+  if ((stored?.mode ?? config.authMode) === 'apikey')
+    env.ANTHROPIC_API_KEY = stored?.apiKey ?? source.ANTHROPIC_API_KEY;
   env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS = String(config.maxSubagents);
   return env;
 }
 
-export function sdkAgentFactory(config: Config): AgentFactory {
+export function sdkAgentFactory(config: Config, authSource?: () => ClaudeAuthSource): AgentFactory {
   let sdk: typeof import('@anthropic-ai/claude-agent-sdk') | undefined;
   const query = (p: Parameters<NonNullable<typeof sdk>['query']>[0]) => {
     if (!sdk) throw new Error('SDK not loaded');
@@ -119,7 +128,7 @@ export function sdkAgentFactory(config: Config): AgentFactory {
   const baseOptions = (): Options => ({
     ...(config.claudePath ? { pathToClaudeCodeExecutable: config.claudePath } : {}),
     settingSources: ['project'],
-    env: sdkEnv(config),
+    env: sdkEnv(config, process.env, authSource?.()),
     includePartialMessages: true,
   });
 

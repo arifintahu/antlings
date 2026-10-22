@@ -9,6 +9,9 @@ import { SessionManager } from './sessions.js';
 import { Folders } from './folders.js';
 import webpush from 'web-push';
 import { PushService } from './push.js';
+import { Connections } from './connections/service.js';
+import { ConnectionSettings } from './connections/store.js';
+import { fileURLToPath } from 'node:url';
 import { wireApp } from './wiring.js';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,6 +70,9 @@ export interface Kit {
   app: FastifyInstance;
   mgr: SessionManager;
   push: PushService;
+  connections: Connections;
+  /** What the fake api.anthropic.com answers to the models check. */
+  anthropic: { status: number };
   /** Payloads handed to the web-push library, with the endpoint they went to. */
   pushSent: { endpoint: string; payload: Record<string, unknown> }[];
   pushFail: { status?: number };
@@ -136,10 +142,24 @@ export async function makeKit(
     audit: (kind, detail) => auth.audit(kind, undefined, detail),
     notifier: push,
   });
+  const anthropic = { status: 200 };
+  const fakeCli = (name: string) => ({
+    cmd: process.execPath,
+    args: [fileURLToPath(new URL(`./e2e/fake-cli/${name}.mjs`, import.meta.url))],
+  });
+  const connections = new Connections({
+    auth,
+    settings: new ConnectionSettings(auth),
+    gh: fakeCli('gh'),
+    claude: fakeCli('claude'),
+    home: homeDir,
+    fetchFn: (async () => new Response('{}', { status: anthropic.status })) as unknown as typeof fetch,
+    clock,
+  });
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts, push });
+      wireApp(a, { auth, mgr, folders, transcripts, connections, push });
       a.addHook('onClose', async () => rmSync(homeDir, { recursive: true, force: true }));
     },
     ...over,
@@ -245,6 +265,8 @@ export async function makeKit(
     app,
     mgr,
     push,
+    connections,
+    anthropic,
     pushSent,
     pushFail,
     home: folders.home,

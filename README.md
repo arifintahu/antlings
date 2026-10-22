@@ -106,7 +106,7 @@ VPS_SSH=you@your-server DOMAIN=ants.example.com ./deploy/deploy.sh
 
 This builds a release, copies it over, and runs `deploy/install.sh` on the server. The installer checks the file checksum, creates an unprivileged `antlings` user, installs a hardened systemd service bound to `127.0.0.1:3100`, writes `/etc/antlings/antlings.env` with generated secrets, writes the Caddy site, reloads Caddy, and checks `/health`. If the new release does not answer, it rolls back to the previous one. It never touches your firewall, databases or other sites. Read what it will do first with `sudo ./deploy/install.sh --dry-run` (see the [runbook](docs/RUNBOOK.md)).
 
-**3. Give it a Claude login** (see below), then **print the setup code** on the server:
+**3. Print the setup code** on the server:
 
 ```bash
 sudo -u antlings antlings setup
@@ -114,13 +114,21 @@ sudo -u antlings antlings setup
 
 **4. Open `https://ants.example.com`**, enter the code (valid for 15 minutes) and create your passkey. Optionally add a backup password and authenticator code on the Security page.
 
+**5. Connect Claude and GitHub** on the Connections page. No more SSH is needed (see below).
+
 Do not have a domain yet? Leave out `DOMAIN` to keep the service on `127.0.0.1` and reach it through an SSH tunnel: `ssh -L 3100:127.0.0.1:3100 you@your-server`, then open `http://localhost:3100`.
 
-### Claude login
+### Connections: Claude and GitHub
 
-Antlings never handles Claude credentials. It starts the real `claude` binary through the Agent SDK. Anthropic's terms ask products built on the Agent SDK to use API keys, so **API key mode is the default**: put `ANTHROPIC_API_KEY=...` in `/etc/antlings/antlings.env` (use a dedicated key with a spend cap) and run `sudo systemctl restart antlings`.
+Open **Connections** in the sidebar (or follow the button at the end of first-run setup). A "Set up Claude and GitHub" prompt sits above it until both are connected. Each change asks for a fresh passkey check and is written to the audit log.
 
-For personal use you can instead sign in as the service user with `sudo -u antlings -H claude login` and set `ANTLINGS_AUTH_MODE=subscription` and `ANTLINGS_SUBSCRIPTION_OK=1`. Read [ADR 0003](docs/adr/0003-claude-login-terms.md) first. You take that terms risk yourself.
+![The Connections page with a GitHub device code waiting for approval](docs/screens/desktop-connections.png)
+
+- **GitHub:** press Connect. The page shows a one-time code and an Open GitHub button; approve on github.com from any device. Antlings runs `gh auth login --web` and `gh auth setup-git` as the service user, so `git push` over HTTPS works in your sessions. You can also set the git name and email for commits. The installer adds the `gh` package with `apt-get`; pass `--no-gh` to skip it.
+- **Claude, API key (default):** paste an Anthropic API key. Anthropic's terms ask products built on the Agent SDK to use API keys. Antlings checks it against the models endpoint (free), then stores it encrypted in its database. It is never shown again.
+- **Claude, subscription:** for personal use only. Tick the terms box and Antlings relays the sign-in of the unmodified `claude` binary: open the link, sign in, paste the code back. Read [ADR 0003](docs/adr/0003-claude-login-terms.md) first. You take that terms risk yourself.
+
+The command-line way still works: `ANTHROPIC_API_KEY=...` in `/etc/antlings/antlings.env`, or `sudo -u antlings -H claude login`. A key saved on the Connections page wins over the env file.
 
 ### Configuration
 

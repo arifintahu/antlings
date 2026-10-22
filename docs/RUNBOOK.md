@@ -42,13 +42,15 @@ sudo ./deploy/install.sh --release antlings-<version>.tar.gz --domain ants.examp
 
 Leave out `--domain` to keep the service on `127.0.0.1:3100` only. The installer checks 600 MB of free memory, refuses a tarball that contains links or unsafe paths, backs up every system file it replaces (the first copy is kept), and never touches ufw, Postgres, Redis, sudoers, other services or the main Caddyfile. If the new release does not answer `/health` it switches back to the previous one. It also adds `DenyUsers antlings` for ssh in `/etc/ssh/sshd_config.d/antlings.conf` (run `systemctl reload ssh` yourself afterwards).
 
-After the first install you do three things yourself:
+After the first install you print one code over SSH, then everything else happens in the browser:
 
 ```bash
-sudo -u antlings -H claude login                 # or set ANTHROPIC_API_KEY in /etc/antlings/antlings.env
 sudo -u antlings antlings setup                  # prints a one-time code, valid 15 minutes
 # open the site, enter the code, create your passkey
+# then connect Claude and GitHub on the Connections page
 ```
+
+The command-line alternatives still work: `sudo -u antlings -H claude login`, `sudo -u antlings -H gh auth login`, or `ANTHROPIC_API_KEY` in `/etc/antlings/antlings.env`.
 
 With a domain, add this line to `/etc/caddy/Caddyfile` once, then `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`:
 
@@ -129,7 +131,8 @@ This removes every passkey, the password fallback and every sign-in, then prints
 | Password and authenticator | Security page: replace password and code |
 | `ANTLINGS_SECRET_KEY` (encrypts the authenticator secret) | 1. Run `sudo -u antlings antlings reset-access` (removes the stored authenticator). 2. Edit the env file and restart. 3. Register again with the new setup code and set up the fallback again. The old secret cannot decrypt anything afterwards. Generate a value with `sudo -u antlings antlings gen-env | grep ^ANTLINGS_SECRET_KEY=` (this prints one secret line; do it on a private terminal). |
 | VAPID keys (push) | Replace both `ANTLINGS_VAPID_*` lines with the output of `antlings gen-env`, restart, then turn push notifications off and on again on each device |
-| Anthropic API key | Edit `ANTHROPIC_API_KEY` in the env file, `sudo systemctl restart antlings` |
+| Anthropic API key | Connections page: save the new key (a saved key wins over the env file), or edit `ANTHROPIC_API_KEY` in the env file and `sudo systemctl restart antlings`. After rotating `ANTLINGS_SECRET_KEY` a key saved on the Connections page can no longer be decrypted, so save it again. |
+| GitHub login | Connections page: Disconnect, then Connect again |
 
 Never paste these values into chat, issues or the repository.
 
@@ -171,7 +174,7 @@ If the main Caddyfile still imports `antlings.caddy`, remove that line yourself 
 
 ## Known limits
 
-- **The agent can read what the service can read.** The service and the agent run as the same Unix user, so a prompt-injected agent can read `/etc/antlings/antlings.env` (secret key, VAPID key, API key), the database, and `~/.claude/.credentials.json`, and can run `antlings reset-access`. Approvals and step-up protect against a stolen browser session, not against the agent. Use a dedicated API key with a spend cap, keep Bypass mode rare, and read the first item in the threat model of [0002-authentication-and-trust-boundary](adr/0002-authentication-and-trust-boundary.md).
+- **The agent can read what the service can read.** That includes the GitHub login (`~/.config/gh/hosts.yml`) and an API key saved on the Connections page: the key is encrypted with `ANTLINGS_SECRET_KEY`, which the agent can also read from the env file, so the encryption protects the database at rest, not the key from the agent. Connect a GitHub account, or limit its access, that you are happy to share with the agent. The service and the agent run as the same Unix user, so a prompt-injected agent can read `/etc/antlings/antlings.env` (secret key, VAPID key, API key), the database, and `~/.claude/.credentials.json`, and can run `antlings reset-access`. Approvals and step-up protect against a stolen browser session, not against the agent. Use a dedicated API key with a spend cap, keep Bypass mode rare, and read the first item in the threat model of [0002-authentication-and-trust-boundary](adr/0002-authentication-and-trust-boundary.md).
 - The agent can reach every service on `127.0.0.1` (Postgres, Redis, the other Node services) and the cloud metadata address. `ufw` does not cover that. A firewall rule that rejects traffic from the `antlings` user to those ports is the fix, for example with nftables `meta skuid antlings`. It is not part of the installer because it must match your other services.
 - fail2ban counts log lines, and the agent can write log lines. The jail has an `ignoreip` list for that reason. Put your own address in it.
 - Event logs grow with use. Delete a session in the app to remove its log and transcript.

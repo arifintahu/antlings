@@ -104,4 +104,15 @@ describe('install scripts', () => {
     expect(install).toContain('chmod 640');
     expect(install).not.toMatch(/echo[^\n]*SECRET_KEY=\$/);
   });
+  it('installs the GitHub CLI unless told not to, and says so in a dry run', () => {
+    expect(install).toContain('--no-gh');
+    expect(install).toContain('apt-get install -y gh');
+    expect(install).toContain('would install gh');
+    // the install is a warning, never a reason to abort the whole install
+    expect(install).toMatch(/apt-get install -y gh[^\n]*\|\|/);
+  });
+  it('sends the owner to the Connections page instead of SSH logins', () => {
+    expect(install).not.toMatch(/note "1\. Sign Claude Code in/);
+    expect(install).toContain('Connections page');
+  });
 });

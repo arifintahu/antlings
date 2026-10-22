@@ -1679,3 +1679,62 @@ textarea.wide-input {
 .modebtn {
   min-width: 44px;
 }
+
+/* Connections page */
+.cstate {
+  font-weight: 600;
+}
+.cstate.ok {
+  color: var(--accent);
+}
+.cstate.warn {
+  color: var(--amber);
+}
+.devcode {
+  margin: 8px 0;
+  padding: 12px;
+  text-align: center;
+  font-size: 32px;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  user-select: all;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.terms {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 2px solid var(--line);
+}
+.terms summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.terms a {
+  color: var(--blue);
+}
+a.btn {
+  text-decoration: none;
+}
+.setup-hint {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 8px;
+  padding: 0 10px;
+  text-align: left;
+  color: var(--fg);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-left: 6px solid var(--amber);
+}
+.setup-hint:hover {
+  border-color: var(--amber);
+}
