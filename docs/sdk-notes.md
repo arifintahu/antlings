@@ -57,3 +57,15 @@ Observed on the VPS on 2026-10-12 with `@anthropic-ai/claude-agent-sdk` 0.3.296 
 | Memory | Importing the SDK adds about 20 MB resident, so Antlings loads it on the first session. The `zod` v4 and `@simplewebauthn/server` imports cost about 16 and 15 MB; the latter is loaded on the first passkey request. |
 | Live turns | A tiny Haiku turn plus `getContextUsage` finished in about 3 seconds. Closing a session and resuming it with a new manager worked (`resume: id`, same folder). The test cleans up the stub folder under `~/.claude/projects`. |
 | `better-sqlite3` 13 | Ships prebuilt binaries for Linux, macOS and Windows inside the package. pnpm 9 still tries `node-gyp rebuild` unless the package is listed in `pnpm.neverBuiltDependencies` or scripts are skipped. |
+
+## Login CLIs (2026-10-22, Claude Code 2.1.220, gh 2.91.0, Windows, stdin from /dev/null)
+
+Checked before the Connections page was built. Linux (`script -qefc` fallback) still needs one manual check on a real server.
+
+| Topic | Observed |
+|---|---|
+| `claude auth login --claudeai` over pipes | Works without a terminal. With `BROWSER=true` it prints `Opening browser to sign in…`, then `If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?...`, then the prompt `Paste code here if prompted > ` and waits for a line on stdin. |
+| Claude login URL host | `claude.com` (redirect target `platform.claude.com`). |
+| `claude auth status --json`, signed out | Keys: `loggedIn` (false), `authMethod` (`none`), `apiProvider`. Signed-in keys were not recorded; the adapter reads `loggedIn`, `authMethod` and `subscriptionType` only and never the email. |
+| `gh auth login --web --git-protocol https --skip-ssh-key` over pipes | Works. Prints `! First copy your one-time code: XXXX-XXXX` and `Open this URL to continue in your web browser: https://github.com/login/device`, then polls. |
+| `gh auth status` | Prints `Logged in to github.com account <login> (keyring)` when signed in. The adapter reads the login from that line only. |
