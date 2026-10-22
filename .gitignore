@@ -22,3 +22,5 @@ data-test/
 web/test-results/
 web/playwright-report/
 dist-release/
+docs/superpowers/
+.superpowers/
