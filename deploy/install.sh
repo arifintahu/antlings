@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Antlings installer. Idempotent. Run as root on the VPS.
 #
-#   sudo ./install.sh --release antlings-0.1.0.tar.gz [--domain ants.example.com] [--dry-run]
+#   sudo ./install.sh --release antlings-0.1.0.tar.gz [--domain ants.example.com] [--no-gh] [--dry-run]
 #
 # What it does, in order (each step prints what it does):
 #   1. checks free memory (refuses under 600 MB), root, Node, systemd
@@ -12,7 +12,8 @@
 #   6. installs the `antlings` command, the systemd unit, the fail2ban filter and jail
 #   7. with --domain: writes /etc/caddy/antlings.caddy as a separate file and, when the main Caddyfile
 #      already imports it, validates the config and reloads Caddy
-#   8. starts the service and checks /health on 127.0.0.1
+#   8. installs the GitHub CLI (`gh`) with apt-get unless --no-gh is given; a failure here is only a warning
+#   9. starts the service and checks /health on 127.0.0.1
 #
 # It never touches ufw, Postgres, Redis, other services, sudoers, or the main Caddyfile.
 # Every file it replaces is copied to /var/backups/antlings-<date> first. uninstall.sh reverses it.
@@ -51,6 +52,7 @@ DRY=0
 RELEASE=""
 DOMAIN=""
 SKIP_DNS=0
+NO_GH=0
 
 usage() {
   sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -65,6 +67,7 @@ while [ $# -gt 0 ]; do
     --release) RELEASE=${2:?--release needs a file}; shift ;;
     --domain) DOMAIN=${2:?--domain needs a name}; shift ;;
     --skip-dns-check) SKIP_DNS=1 ;;
+    --no-gh) NO_GH=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
@@ -364,7 +367,22 @@ else
 fi
 if [ "$caddy_reload" -eq 1 ]; then run systemctl reload caddy; fi
 
-# ---------------------------------------------------------------- 8. start
+# ---------------------------------------------------------------- 8. github cli
+# The Connections page signs gh in from the browser. The service has no root, so the package is installed here.
+step "GitHub CLI"
+if [ "$NO_GH" -eq 1 ]; then
+  note "--no-gh: the GitHub CLI is not installed. The Connections page will say so."
+elif command -v gh >/dev/null 2>&1; then
+  note "gh already installed at $(command -v gh)"
+elif command -v apt-get >/dev/null 2>&1; then
+  if [ "$DRY" -eq 1 ]; then note "would install gh (GitHub CLI) with: apt-get install -y gh"; else
+    run apt-get install -y gh || note "WARNING: could not install gh. Connect GitHub later after installing it yourself (the Connections page shows the command)."
+  fi
+else
+  note "no apt-get here: install gh yourself to connect GitHub from the Connections page"
+fi
+
+# ---------------------------------------------------------------- 9. start
 step "Start"
 if [ -n "$RELEASE" ]; then
   note "restarting the service ends running Claude Code sessions. They resume on the next message."
@@ -394,9 +412,10 @@ if [ "$DRY" -eq 0 ]; then
 fi
 
 step "Next steps (you do these, nothing here did)"
-note "1. Sign Claude Code in as the service user, or set ANTHROPIC_API_KEY in $ENV_FILE:"
+note "1. Print the one-time setup code:   sudo -u $APP_USER antlings setup"
+note "2. Open the site, enter the code and register your passkey (the code works for 15 minutes)."
+note "3. On the Connections page, connect Claude and GitHub. Nothing else needs SSH."
+note "   Command-line alternative for Claude: set ANTHROPIC_API_KEY in $ENV_FILE, or run"
 note "     sudo -u $APP_USER -H claude login"
-note "2. Print the one-time setup code:   sudo -u $APP_USER antlings setup"
-note "3. Open the site and register your passkey (the code works for 15 minutes)."
 if [ "$DRY" -eq 1 ]; then note "This was a dry run. Nothing was changed."; fi
 exit 0
