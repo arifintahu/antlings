@@ -30,6 +30,7 @@ export function registerConnectionRoutes(app: FastifyInstance, c: Connections): 
   };
 
   app.get('/api/connections', async () => c.snapshot());
+  app.get('/api/connections/summary', async () => c.summary());
 
   app.post('/api/connections/github/start', (req, reply) => change(req, reply, () => c.githubStart(req.ip)));
   app.post('/api/connections/github/cancel', (req, reply) =>

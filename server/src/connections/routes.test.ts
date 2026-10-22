@@ -296,3 +296,62 @@ describe('audit', () => {
       expect(kinds, k).toContain(k);
   });
 });
+
+describe('summary', () => {
+  const summary = async (): Promise<Json> => (await call('GET', '/summary')).json();
+  const ghCalls = () => {
+    try {
+      return readFileSync(join(kit.home, '.fake-gh-status-calls'), 'utf8').split('\n').filter(Boolean).length;
+    } catch {
+      return 0;
+    }
+  };
+
+  it('needs a session', async () => {
+    kit = await makeKit();
+    const r = await kit.call({ method: 'GET', url: '/api/connections/summary' });
+    expect(r.statusCode).toBe(401);
+  });
+
+  it('starts with both missing and carries nothing but two words', async () => {
+    await setup();
+    expect(await summary()).toEqual({ claude: 'missing', github: 'missing' });
+  });
+
+  it('follows a saved API key and a GitHub sign-in without waiting for the cache', async () => {
+    await setup();
+    await summary();
+    await call('POST', '/claude/apikey', { apiKey: KEY });
+    expect((await summary()).claude).toBe('connected');
+    await call('DELETE', '/claude/apikey');
+    expect((await summary()).claude).toBe('missing');
+    await call('POST', '/github/start', {});
+    await until((s) => s.github.login.phase === 'done');
+    expect((await summary()).github).toBe('connected');
+    await call('POST', '/github/logout', {});
+    expect((await summary()).github).toBe('missing');
+  });
+
+  it('counts Claude as connected in subscription mode only once signed in', async () => {
+    await setup();
+    await call('POST', '/claude/mode', { mode: 'subscription', ack: true });
+    expect((await summary()).claude).toBe('missing');
+    await call('POST', '/claude/login/start', {});
+    await until((s) => s.claude.login.phase === 'waiting' && s.claude.login.url);
+    await call('POST', '/claude/login/code', { code: 'goodcode1' });
+    await until((s) => s.claude.login.phase === 'done');
+    expect((await summary()).claude).toBe('connected');
+  });
+
+  it('asks the CLIs at most once a minute', async () => {
+    await setup();
+    await summary();
+    const after = ghCalls();
+    await summary();
+    await summary();
+    expect(ghCalls()).toBe(after);
+    kit.clock.advance(61_000);
+    await summary();
+    expect(ghCalls()).toBe(after + 1);
+  });
+});

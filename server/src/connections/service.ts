@@ -37,6 +37,12 @@ export interface ConnectionsDeps {
   clock: Clock;
 }
 
+/** What the sidebar needs: is each one connected. Two words, nothing else. */
+export interface ConnectionsSummary {
+  claude: 'connected' | 'missing';
+  github: 'connected' | 'missing';
+}
+
 export interface ConnectionsDto {
   claude: {
     mode: ClaudeMode;
@@ -55,6 +61,7 @@ export interface ConnectionsDto {
 }
 
 const START_GAP_MS = 60_000;
+const SUMMARY_TTL_MS = 60_000;
 const isActive = (s: LoginState): boolean => s.phase === 'starting' || s.phase === 'waiting';
 
 export class Connections {
@@ -62,6 +69,7 @@ export class Connections {
   private readonly claudeRunner: LoginRunner;
   private readonly lastStart = new Map<'github' | 'claude', number>();
   private readonly git: Cli;
+  private summaryCache?: { at: number; value: ConnectionsSummary };
   /** CLI status is slow (it starts Claude Code), so a poll during a login reuses the last answer. */
   private status?: {
     gh: Awaited<ReturnType<typeof ghStatus>>;
@@ -73,11 +81,13 @@ export class Connections {
   constructor(private readonly d: ConnectionsDeps) {
     this.git = d.git ?? { cmd: 'git' };
     this.github = new LoginRunner(d.clock, undefined, (end) => {
+      this.forgetSummary();
       if (end.phase !== 'done') return;
       d.auth.audit('connect_done', undefined, { provider: 'github' });
       void runCli(d.gh, ['auth', 'setup-git'], { env: this.env(), timeoutMs: 10_000 });
     });
     this.claudeRunner = new LoginRunner(d.clock, undefined, (end) => {
+      this.forgetSummary();
       if (end.phase === 'done') d.auth.audit('connect_done', undefined, { provider: 'claude' });
     });
   }
@@ -146,6 +156,29 @@ export class Connections {
     };
   }
 
+  private forgetSummary(): void {
+    this.summaryCache = undefined;
+  }
+
+  /** Cheap enough for every page load: cached for a minute, and Claude Code is only started in subscription mode. */
+  async summary(): Promise<ConnectionsSummary> {
+    const now = this.d.clock.now();
+    if (this.summaryCache && now - this.summaryCache.at < SUMMARY_TTL_MS) return this.summaryCache.value;
+    const { settings } = this.d;
+    const [gh, claude] = await Promise.all([
+      ghStatus(this.d.gh, this.env()),
+      settings.mode() === 'apikey'
+        ? Promise.resolve(settings.hasApiKey() || Boolean(process.env.ANTHROPIC_API_KEY))
+        : claudeStatus(this.d.claude, this.env()).then((c) => c.state === 'signed_in'),
+    ]);
+    const value: ConnectionsSummary = {
+      claude: claude ? 'connected' : 'missing',
+      github: gh.state === 'signed_in' ? 'connected' : 'missing',
+    };
+    this.summaryCache = { at: now, value };
+    return value;
+  }
+
   // ---- GitHub ----
 
   githubStart(ip: string): void {
@@ -161,6 +194,7 @@ export class Connections {
       env: this.env(),
       timeoutMs: 10_000,
     });
+    this.forgetSummary();
     this.d.auth.audit('connect_logout', ip, { provider: 'github' });
   }
   async setGitIdentity(name: string, email: string, ip: string): Promise<void> {
@@ -184,11 +218,13 @@ export class Connections {
     const result = await checkAnthropicKey(key, this.d.fetchFn);
     if (result === 'rejected') throw new ConnError(400, 'key_rejected');
     this.d.settings.setApiKey(key);
+    this.forgetSummary();
     this.d.auth.audit('claude_key_set', ip, { verified: result === 'ok' });
     return { verified: result === 'ok' };
   }
   clearApiKey(ip: string): void {
     this.d.settings.clearApiKey();
+    this.forgetSummary();
     this.d.auth.audit('claude_key_cleared', ip, {});
   }
   async testClaude(): Promise<'ok' | 'rejected' | 'unreachable' | 'signed_out' | 'no_key'> {
@@ -205,6 +241,7 @@ export class Connections {
       if (ack) this.d.settings.setAck(this.d.clock.now());
     }
     this.d.settings.setMode(mode);
+    this.forgetSummary();
     this.d.auth.audit('claude_mode', ip, { mode });
   }
   claudeStart(ip: string): void {
@@ -222,6 +259,7 @@ export class Connections {
   }
   async claudeLogout(ip: string): Promise<void> {
     await runCli(this.d.claude, ['auth', 'logout'], { env: this.env(), timeoutMs: 10_000 });
+    this.forgetSummary();
     this.d.auth.audit('connect_logout', ip, { provider: 'claude' });
   }
 
