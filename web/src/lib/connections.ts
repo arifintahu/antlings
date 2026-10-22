@@ -10,6 +10,12 @@ export type LoginState =
   | { phase: 'done' }
   | { phase: 'error'; reason: 'no_url' | 'timeout' | 'failed' | 'unavailable' | 'cancelled' };
 
+/** GET /api/connections/summary: is each one connected. */
+export interface ConnectionsSummary {
+  claude: 'connected' | 'missing';
+  github: 'connected' | 'missing';
+}
+
 export interface ConnectionsDto {
   claude: {
     mode: 'apikey' | 'subscription';
@@ -56,6 +62,15 @@ export function stateLabel(s: LoginState, provider: Provider): string {
           return 'Sign-in cancelled.';
       }
   }
+}
+
+/** The sidebar prompt. Empty while unknown and once everything is connected. */
+export function setupLabel(s: ConnectionsSummary | null): string {
+  if (!s) return '';
+  const missing = [s.claude === 'missing' ? 'Claude' : '', s.github === 'missing' ? 'GitHub' : ''].filter(
+    Boolean,
+  );
+  return missing.length ? `Set up ${missing.join(' and ')}` : '';
 }
 
 export const connectionTone = (cli: { state: CliState }): 'ok' | 'warn' | 'idle' =>

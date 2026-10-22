@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   connectionTone,
   loginActive,
+  setupLabel,
   pollWhile,
   stateLabel,
   type ConnectionsDto,
@@ -99,5 +100,17 @@ describe('pollWhile', () => {
     pollWhile(fn, active, (d) => seen.push(d.github.login.phase), 1500);
     await vi.advanceTimersByTimeAsync(1500 * 3);
     expect(seen).toEqual(['done']);
+  });
+});
+
+describe('setupLabel', () => {
+  it('is empty while unknown and when both are connected', () => {
+    expect(setupLabel(null)).toBe('');
+    expect(setupLabel({ claude: 'connected', github: 'connected' })).toBe('');
+  });
+  it('names exactly what is missing', () => {
+    expect(setupLabel({ claude: 'missing', github: 'connected' })).toBe('Set up Claude');
+    expect(setupLabel({ claude: 'connected', github: 'missing' })).toBe('Set up GitHub');
+    expect(setupLabel({ claude: 'missing', github: 'missing' })).toBe('Set up Claude and GitHub');
   });
 });

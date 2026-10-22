@@ -94,3 +94,28 @@ test('fits a 375 px phone and animates nothing under reduced motion', async ({ p
     expect(box?.height ?? 0, await b.innerText()).toBeGreaterThanOrEqual(44);
   }
 });
+
+test('the sidebar asks for setup until both are connected, then goes quiet', async ({ page }) => {
+  await page.reload(); // starts from the cleaned-up server state
+  const hint = (name: string) => page.getByRole('button', { name });
+  await expect(hint('Set up Claude and GitHub →')).toBeVisible();
+  await expectAccessible(page, 'sidebar with the setup prompt');
+
+  await openConnections(page);
+  await page.getByLabel('Anthropic API key').fill('sk-ant-good-key-1234567890');
+  await page.getByRole('button', { name: 'Save key' }).click();
+  await expect(page.getByText('API key saved and checked.')).toBeVisible();
+  await page.getByRole('button', { name: 'Connect GitHub' }).click();
+  await expect(page.getByText('Connected as octo')).toBeVisible();
+  await page.getByRole('button', { name: '← Back to sessions' }).click();
+
+  await expect(page.getByRole('button', { name: /^Set up/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Connections', exact: true })).toBeVisible();
+
+  await openConnections(page);
+  page.once('dialog', (d) => void d.accept());
+  await page.getByRole('button', { name: 'Disconnect GitHub' }).click();
+  await expect(page.getByText('Not connected')).toBeVisible();
+  await page.getByRole('button', { name: '← Back to sessions' }).click();
+  await expect(hint('Set up GitHub →')).toBeVisible();
+});

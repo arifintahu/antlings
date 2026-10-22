@@ -2,6 +2,7 @@
   import type { SessionSummary } from '@antlings/shared';
   import { fmtReset, level } from '../lib/model.js';
   import { showPath } from '../lib/options.js';
+  import { setupLabel } from '../lib/connections.js';
   import { app, lookOf, nameOf, titleOf } from '../lib/store.svelte.js';
   import Ant from './Ant.svelte';
   import Chip from './Chip.svelte';
@@ -134,6 +135,9 @@
         <div class="muted">Plan usage shows after your first message.</div>
       {/each}
     </section>
+    {#if setupLabel(app.connSummary)}
+      <button class="setup-hint" type="button" onclick={onconnections}>{setupLabel(app.connSummary)} →</button>
+    {/if}
     <div class="foot-links">
       <button class="link" type="button" onclick={onconnections}>Connections</button>
       <button class="link" type="button" onclick={onsecurity}>Security</button>

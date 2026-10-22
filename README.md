@@ -120,7 +120,7 @@ Do not have a domain yet? Leave out `DOMAIN` to keep the service on `127.0.0.1` 
 
 ### Connections: Claude and GitHub
 
-Open **Connections** in the sidebar (or follow the button at the end of first-run setup). Each change asks for a fresh passkey check and is written to the audit log.
+Open **Connections** in the sidebar (or follow the button at the end of first-run setup). A "Set up Claude and GitHub" prompt sits above it until both are connected. Each change asks for a fresh passkey check and is written to the audit log.
 
 ![The Connections page with a GitHub device code waiting for approval](docs/screens/desktop-connections.png)
 

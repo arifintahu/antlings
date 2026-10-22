@@ -317,7 +317,12 @@
 <NewSession open={newOpen} onclose={() => (newOpen = false)} />
 <SessionSettings open={settingsOpen} onclose={() => (settingsOpen = false)} />
 {#if app.securityOpen}<Security onclose={() => (app.securityOpen = false)} />{/if}
-{#if app.connectionsOpen}<Connections onclose={() => (app.connectionsOpen = false)} />{/if}
+{#if app.connectionsOpen}<Connections
+    onclose={() => {
+      app.connectionsOpen = false;
+      void app.refreshConnections();
+    }}
+  />{/if}
 
 <dialog bind:this={delDlg} aria-labelledby="dlg-h" onclose={() => (confirmDelete = false)}>
   <h2 id="dlg-h">Delete session?</h2>

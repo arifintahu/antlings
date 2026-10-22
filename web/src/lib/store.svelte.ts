@@ -7,6 +7,7 @@ import type {
 } from '@antlings/shared';
 import type { AntState } from '../ants/draw.js';
 import { ApiError, del, get, isStepUp, patch, post, setCsrf, setUnauthorizedHandler } from './api.js';
+import type { ConnectionsSummary } from './connections.js';
 import { applyDelta, applyEvent, newView, type SessionView } from './model.js';
 import { saveLast } from './options.js';
 import { Socket, type SocketStatus } from './socket.js';
@@ -55,6 +56,8 @@ class AppStore {
   screen = $state<Screen>('boot');
   securityOpen = $state(false);
   connectionsOpen = $state(false);
+  /** Which of Claude and GitHub are connected. Null until the first answer. */
+  connSummary = $state<ConnectionsSummary | null>(null);
   sessions = $state<SessionSummary[]>([]);
   listView = $state<'active' | 'archived'>('active');
   views = $state<Record<string, SessionView>>({});
@@ -125,6 +128,7 @@ class AppStore {
   private async enterApp(): Promise<void> {
     this.screen = 'app';
     this.socket.start();
+    void this.refreshConnections();
     await Promise.all([this.refreshSessions(), this.loadModels(), this.loadUsage()]);
     window.addEventListener('hashchange', this.onHash);
     const wanted = location.hash.match(/^#s=([0-9a-f-]{36})$/i)?.[1];
@@ -147,6 +151,7 @@ class AppStore {
     this.activeId = null;
     this.securityOpen = false;
     this.connectionsOpen = false;
+    this.connSummary = null;
     this.screen = 'login';
   }
 
@@ -381,6 +386,15 @@ class AppStore {
     return this.sessions
       .filter((s) => s.id !== this.activeId && this.views[s.id]?.state === 'approval')
       .map((s) => ({ id: s.id, title: titleOf(s) }));
+  }
+
+  /** Keeps the last answer when the request fails; the prompt is a convenience. */
+  async refreshConnections(): Promise<void> {
+    try {
+      this.connSummary = await get<ConnectionsSummary>('/api/connections/summary');
+    } catch {
+      /* leave it as it was */
+    }
   }
 
   status(): Promise<StatusDto> {
