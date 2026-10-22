@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocketServer } from 'ws';
 import type { Auth } from './auth/service.js';
+import { registerConnectionRoutes } from './connections/routes.js';
+import type { Connections } from './connections/service.js';
 import type { Folders } from './folders.js';
 import { registerPushRoutes, type PushService } from './push.js';
 import { registerStatusRoutes } from './status.js';
@@ -14,6 +16,7 @@ export interface Wiring {
   mgr: SessionManager;
   folders: Folders;
   transcripts: Transcripts;
+  connections: Connections;
   push?: PushService;
 }
 
@@ -23,5 +26,6 @@ export function wireApp(app: FastifyInstance, w: Wiring): WebSocketServer {
   const wss = attachWebSocket(app, w.auth, w.mgr, w.transcripts);
   if (w.push) registerPushRoutes(app, w.push);
   registerStatusRoutes(app, w.auth, w.mgr, w.push);
+  registerConnectionRoutes(app, w.connections);
   return wss;
 }

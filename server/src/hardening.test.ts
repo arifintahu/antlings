@@ -168,4 +168,19 @@ describe('startup refusals and the agent environment', () => {
     });
     expect(sub.ANTHROPIC_API_KEY).toBeUndefined();
   });
+
+  it('the stored Claude mode and API key win over the environment', async () => {
+    const { sdkEnv } = await import('./agent.js');
+    const { testConfig } = await import('./testkit.js');
+    const stored = sdkEnv(
+      testConfig(),
+      { ANTHROPIC_API_KEY: 'sk-ant-env' },
+      { mode: 'apikey', apiKey: 'sk-ant-stored' },
+    );
+    expect(stored.ANTHROPIC_API_KEY).toBe('sk-ant-stored');
+    const envOnly = sdkEnv(testConfig(), { ANTHROPIC_API_KEY: 'sk-ant-env' }, { mode: 'apikey' });
+    expect(envOnly.ANTHROPIC_API_KEY).toBe('sk-ant-env');
+    const sub = sdkEnv(testConfig(), { ANTHROPIC_API_KEY: 'sk-ant-env' }, { mode: 'subscription' });
+    expect(sub.ANTHROPIC_API_KEY).toBeUndefined();
+  });
 });
