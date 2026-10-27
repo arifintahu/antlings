@@ -1074,6 +1074,32 @@ dialog input {
   display: flex;
   justify-content: space-between;
 }
+.about-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.about-ver {
+  color: var(--muted);
+}
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.about-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+}
+.about-lic {
+  margin-top: 6px;
+  color: var(--muted);
+}
 #stepdlg .btn.wide {
   margin-top: 10px;
 }
