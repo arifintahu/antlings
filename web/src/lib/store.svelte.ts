@@ -57,6 +57,9 @@ class AppStore {
   screen = $state<Screen>('boot');
   securityOpen = $state(false);
   connectionsOpen = $state(false);
+  aboutOpen = $state(false);
+  /** The server's version, from its package.json. Empty until the first answer. */
+  version = $state('');
   /** Which of Claude and GitHub are connected. Null until the first answer. */
   connSummary = $state<ConnectionsSummary | null>(null);
   sessions = $state<SessionSummary[]>([]);
@@ -137,6 +140,7 @@ class AppStore {
     this.screen = 'app';
     this.socket.start();
     void this.refreshConnections();
+    void this.loadVersion();
     await Promise.all([this.refreshSessions(), this.loadModels(), this.loadUsage()]);
     window.addEventListener('hashchange', this.onHash);
     const wanted = location.hash.match(/^#s=([0-9a-f-]{36})$/i)?.[1];
@@ -159,6 +163,7 @@ class AppStore {
     this.activeId = null;
     this.securityOpen = false;
     this.connectionsOpen = false;
+    this.aboutOpen = false;
     this.connSummary = null;
     this.screen = 'login';
   }
@@ -398,6 +403,14 @@ class AppStore {
   }
 
   /** Keeps the last answer when the request fails; the prompt is a convenience. */
+  async loadVersion(): Promise<void> {
+    try {
+      this.version = (await get<{ version: string }>('/api/status')).version;
+    } catch {
+      /* the label stays hidden */
+    }
+  }
+
   async refreshConnections(): Promise<void> {
     try {
       this.connSummary = await get<ConnectionsSummary>('/api/connections/summary');

@@ -8,6 +8,7 @@
   import Conversation from './Conversation.svelte';
   import NewSession from './NewSession.svelte';
   import Office from './Office.svelte';
+  import About from './About.svelte';
   import Connections from './Connections.svelte';
   import Security from './Security.svelte';
   import SessionSettings from './SessionSettings.svelte';
@@ -243,6 +244,10 @@
       drawer = false;
       app.connectionsOpen = true;
     }}
+    onabout={() => {
+      drawer = false;
+      app.aboutOpen = true;
+    }}
   />
   <button class="scrim" class:show={drawer && !desktop} aria-label="Close sessions" tabindex="-1" onclick={() => (drawer = false)}></button>
 
@@ -407,6 +412,7 @@
 
 <NewSession open={newOpen} onclose={() => (newOpen = false)} />
 <SessionSettings open={settingsOpen} onclose={() => (settingsOpen = false)} />
+<About open={app.aboutOpen} onclose={() => (app.aboutOpen = false)} />
 {#if app.securityOpen}<Security onclose={() => (app.securityOpen = false)} />{/if}
 {#if app.connectionsOpen}<Connections
     onclose={() => {
