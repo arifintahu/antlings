@@ -4,6 +4,7 @@ import type {
   PlanUsage,
   ServerMessage,
   SessionSummary,
+  TerminalInfo,
 } from '@antlings/shared';
 import type { AntState } from '../ants/draw.js';
 import { ApiError, del, get, isStepUp, patch, post, setCsrf, setUnauthorizedHandler } from './api.js';
@@ -73,6 +74,9 @@ class AppStore {
   freshUntil = 0;
   now = $state(Date.now());
   loadError = $state('');
+  /** Shells per session, as the server last listed them. */
+  terminals = $state<Record<string, TerminalInfo[]>>({});
+  termOpen = $state<Record<string, boolean>>({});
 
   private removed = new Set<string>();
   /** lastSeq at the moment a session was (re)subscribed. Used to say how many events a reconnect caught up. */
@@ -93,6 +97,10 @@ class AppStore {
     setInterval(() => {
       this.now = Date.now();
     }, 1000);
+    // Keeps the "running" dot right while the panel is hidden, and notices shells that ended on their own.
+    setInterval(() => {
+      if (this.activeId && this.screen === 'app') void this.refreshTerminals(this.activeId);
+    }, 15_000);
   }
 
   // ---- boot and sign-in ----
@@ -230,6 +238,7 @@ class AppStore {
       this.banner = e instanceof ApiError && e.status === 404 ? 'That session was not found.' : this.banner;
     }
     await this.watch(id);
+    void this.refreshTerminals(id);
   }
 
   closeSession(): void {
@@ -405,8 +414,54 @@ class AppStore {
     return post<{ sent: number }>('/api/push/test');
   }
 
+  // ---- terminals ----
+
+  /** Shells of the open session that are still running. */
+  get runningTerminals(): number {
+    return (this.activeId ? (this.terminals[this.activeId] ?? []) : []).filter((t) => t.running).length;
+  }
+
+  async refreshTerminals(id: string): Promise<void> {
+    try {
+      this.terminals[id] = (
+        await get<{ terminals: TerminalInfo[] }>(`/api/sessions/${id}/terminals`)
+      ).terminals;
+    } catch {
+      /* keep the old list; the offline banner explains */
+    }
+  }
+
+  async openTerminal(id: string, size: { cols: number; rows: number }): Promise<TerminalInfo | undefined> {
+    try {
+      const { terminal } = await post<{ terminal: TerminalInfo }>(`/api/sessions/${id}/terminals`, size);
+      this.terminals[id] = [...(this.terminals[id] ?? []), terminal];
+      return terminal;
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : '';
+      this.banner =
+        code === 'terminal_limit'
+          ? 'Too many terminals are open. Close one first.'
+          : code === 'archived'
+            ? 'This session is archived. Unarchive it to open a terminal.'
+            : code === 'shell_unavailable'
+              ? 'The server could not start a shell.'
+              : 'Could not open a terminal.';
+      return undefined;
+    }
+  }
+
+  async closeTerminal(id: string, terminalId: string): Promise<void> {
+    this.terminals[id] = (this.terminals[id] ?? []).filter((t) => t.id !== terminalId);
+    try {
+      await del(`/api/sessions/${id}/terminals/${terminalId}`);
+    } catch {
+      /* already gone */
+    }
+  }
+
   async archive(id: string, archived: boolean): Promise<void> {
     await patch(`/api/sessions/${id}`, { archived });
+    if (archived) this.terminals[id] = []; // the server killed the shells
     await this.refreshSessions();
     if (archived && this.activeId === id) this.closeSession();
     this.live = archived ? 'Session archived' : 'Session unarchived';

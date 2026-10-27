@@ -4,6 +4,15 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Session terminal: a pty shell per session, started in the session's folder, shown beside the chat (desktop) or behind a Chat | Terminal switch with a key bar (below 900 px). Up to 4 running shells per session and 12 in total, about 5,000 lines of scrollback replayed on reattach. Shells survive a browser reload and end on archive, delete, tab close or server restart. New routes `/api/sessions/:id/terminals` and a WebSocket at `/ws/term`. Open and close are audited.
+- The page's CSP now carries a per-response nonce for `style-src` (still no `unsafe-inline`), because xterm.js creates `<style>` elements.
+
+### Changed
+
+- The release build installs `python3`, `make` and `g++` in the build container to compile `node-pty`.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added

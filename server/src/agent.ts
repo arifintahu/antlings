@@ -85,7 +85,7 @@ class Inbox {
 }
 
 /** The agent's shell gets a small allowlist, never the service's own secrets (ANTLINGS_*). */
-const ENV_ALLOW = [
+export const ENV_ALLOW = [
   'PATH',
   'HOME',
   'USER',

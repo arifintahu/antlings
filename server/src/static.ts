@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { securityHeaders } from './app.js';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -16,7 +18,7 @@ const TYPES: Record<string, string> = {
 };
 
 /** Serves the built web app. Public: the login page and its assets must load without a session. */
-export async function registerStatic(app: FastifyInstance, dir: string): Promise<void> {
+export async function registerStatic(app: FastifyInstance, dir: string, origin: string): Promise<void> {
   const root = resolve(dir);
   app.get('/*', { config: { public: true } }, async (req, reply) => {
     let path: string;
@@ -41,6 +43,12 @@ export async function registerStatic(app: FastifyInstance, dir: string): Promise
       'Cache-Control',
       file.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
     );
+    if (ext === '.html') {
+      // A fresh nonce per response, in the CSP header and in the page, so scripts can tag the <style> elements they create.
+      const nonce = randomBytes(16).toString('base64url');
+      reply.header('Content-Security-Policy', securityHeaders(origin, nonce)['Content-Security-Policy']!);
+      return reply.send(readFileSync(file, 'utf8').replaceAll('__CSP_NONCE__', nonce));
+    }
     return reply.send(readFileSync(file));
   });
 }

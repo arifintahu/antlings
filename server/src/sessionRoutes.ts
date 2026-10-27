@@ -4,6 +4,7 @@ import { PERMISSION_MODES, type SessionSummary } from '@antlings/shared';
 import type { Effort } from './agent.js';
 import { historyEvents } from './events.js';
 import { FolderError, type Folders } from './folders.js';
+import type { Terminals } from './terminals/registry.js';
 import { LimitError, NotFoundError, type SessionManager } from './sessions.js';
 import type { Transcripts, TranscriptInfo } from './transcripts.js';
 
@@ -27,10 +28,28 @@ export interface SessionRouteDeps {
   mgr: SessionManager;
   folders: Folders;
   transcripts: Transcripts;
+  terms: Terminals;
+}
+
+/** A transcript the owner may touch: valid id, and its folder is inside home. */
+export function ownedSession(
+  d: Pick<SessionRouteDeps, 'mgr' | 'folders' | 'transcripts'>,
+): (id: string) => Promise<TranscriptInfo | undefined> {
+  const { mgr, folders, transcripts } = d;
+  return async (id) => {
+    if (!ID_RE.test(id)) return undefined;
+    // A session that has not had its first message yet exists only in Antlings' own metadata.
+    const meta = mgr.meta(id);
+    const info =
+      (await transcripts.info(id)) ??
+      (meta && { sessionId: id, summary: 'New session', lastModified: meta.createdAt, cwd: meta.cwd });
+    if (!info?.cwd || folders.relative(info.cwd) === null) return undefined;
+    return info;
+  };
 }
 
 export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps): void {
-  const { mgr, folders, transcripts } = d;
+  const { mgr, folders, transcripts, terms } = d;
 
   const fail = (reply: FastifyReply, e: unknown) => {
     if (e instanceof FolderError) {
@@ -42,17 +61,7 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
     throw e;
   };
 
-  /** A transcript the owner may touch: valid id, and its folder is inside home. */
-  const owned = async (id: string): Promise<TranscriptInfo | undefined> => {
-    if (!ID_RE.test(id)) return undefined;
-    // A session that has not had its first message yet exists only in Antlings' own metadata.
-    const meta = mgr.meta(id);
-    const info =
-      (await transcripts.info(id)) ??
-      (meta && { sessionId: id, summary: 'New session', lastModified: meta.createdAt, cwd: meta.cwd });
-    if (!info?.cwd || folders.relative(info.cwd) === null) return undefined;
-    return info;
-  };
+  const owned = ownedSession(d);
 
   const summary = (i: TranscriptInfo): SessionSummary => ({
     id: i.sessionId,
@@ -170,7 +179,10 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
     if (b.pinned !== undefined) mgr.setPinned(info.sessionId, b.pinned);
     if (b.archived !== undefined) {
       await transcripts.tag(info.sessionId, b.archived ? 'archived' : null);
-      if (b.archived) mgr.close(info.sessionId);
+      if (b.archived) {
+        mgr.close(info.sessionId);
+        terms.killSession(info.sessionId, 'archive');
+      }
       app.auth.audit(b.archived ? 'session_archived' : 'session_unarchived', req.ip, { id: info.sessionId });
     }
     return { ok: true };
@@ -180,6 +192,7 @@ export function registerSessionRoutes(app: FastifyInstance, d: SessionRouteDeps)
     if (!app.requireFresh(req, reply)) return;
     const info = await owned(req.params.id);
     if (!info) return reply.code(404).send({ error: 'not_found' });
+    terms.killSession(info.sessionId, 'delete');
     await mgr.remove(info.sessionId);
     return { ok: true };
   });

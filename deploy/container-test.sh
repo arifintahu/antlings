@@ -78,6 +78,18 @@ grep -q "ANTLINGS_ORIGIN=http://localhost:3100" /etc/antlings/antlings.env && ok
 if grep -qE "SECRET_KEY=|VAPID_PRIVATE=" /tmp/install1.log; then bad "installer printed a secret"; else ok "installer printed no secret"; fi
 curl -fsS http://127.0.0.1:3100/health | grep -q "\"ok\":true" && ok "service answers /health as user antlings" || bad "health"
 expect_eq "service runs as antlings" "antlings" "$(ps -o user= -p "$(pgrep -f "^node dist/main.js$" | head -1)" | tr -d " ")"
+cat > /tmp/ptytest.cjs <<\JS
+const lib = require(require.resolve("node-pty", { paths: ["/opt/antlings/current/app"] }));
+const p = lib.spawn("/bin/bash", ["-l"], { cwd: "/tmp", env: { PATH: process.env.PATH, HOME: "/tmp" }, cols: 80, rows: 24 });
+const CR = String.fromCharCode(13);
+let out = "";
+p.onData((d) => { out += d; if (out.includes(CR + "pty-ok")) { console.log("PTY-FOUND"); process.exit(0); } });
+p.write("echo pty-ok" + CR);
+setTimeout(() => { console.log(JSON.stringify(out.slice(-300))); process.exit(1); }, 5000);
+JS
+chmod 644 /tmp/ptytest.cjs
+pty_out=$(su antlings -s /bin/bash -c "node /tmp/ptytest.cjs" 2>&1 || true)
+case "$pty_out" in *PTY-FOUND*) ok "a shell starts through the shipped node-pty as antlings" ;; *) echo "$pty_out" | head -8; bad "node-pty cannot start a shell" ;; esac
 
 echo "--- setup as the service user"
 code=$(su antlings -s /bin/bash -c "antlings setup" | head -1)

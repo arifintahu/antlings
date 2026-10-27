@@ -12,6 +12,8 @@ import { PushService } from './push.js';
 import { Connections } from './connections/service.js';
 import { ConnectionSettings } from './connections/store.js';
 import { fileURLToPath } from 'node:url';
+import { FakePtyFactory } from './terminals/fakePty.js';
+import { Terminals } from './terminals/registry.js';
 import { wireApp } from './wiring.js';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -69,6 +71,8 @@ export interface Creds {
 export interface Kit {
   app: FastifyInstance;
   mgr: SessionManager;
+  terms: Terminals;
+  pty: FakePtyFactory;
   push: PushService;
   connections: Connections;
   /** What the fake api.anthropic.com answers to the models check. */
@@ -85,6 +89,12 @@ export interface Kit {
   listen(): Promise<{
     port: number;
     open(c: Creds, opts?: { origin?: string | null; ticket?: string }): Promise<TestSocket>;
+    openTerminal(
+      c: Creds,
+      sessionId: string,
+      terminalId: string,
+      opts?: { origin?: string | null; ticket?: string },
+    ): Promise<TestSocket>;
   }>;
   auth: Auth;
   clock: FakeClock;
@@ -156,10 +166,17 @@ export async function makeKit(
     fetchFn: (async () => new Response('{}', { status: anthropic.status })) as unknown as typeof fetch,
     clock,
   });
+  const pty = new FakePtyFactory();
+  const terms = new Terminals({
+    pty,
+    clock,
+    audit: (kind, detail) => auth.audit(kind, undefined, detail),
+    env: { PATH: '/bin', HOME: homeDir, SHELL: '/bin/bash', ANTLINGS_SECRET_KEY: 'x' },
+  });
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts, connections, push });
+      wireApp(a, { auth, mgr, folders, transcripts, connections, terms, push });
       a.addHook('onClose', async () => rmSync(homeDir, { recursive: true, force: true }));
     },
     ...over,
@@ -219,13 +236,23 @@ export async function makeKit(
     const port = (app.server.address() as { port: number }).port;
     return {
       port,
-      async open(c, o = {}) {
+      open: (c, o = {}) => connect('/ws', '', c, o),
+      openTerminal: (c, sessionId, terminalId, o = {}) =>
+        connect('/ws/term', `&session=${sessionId}&terminal=${terminalId}`, c, o),
+    };
+    async function connect(
+      path: string,
+      extra: string,
+      c: Creds,
+      o: { origin?: string | null; ticket?: string },
+    ): Promise<TestSocket> {
+      {
         let ticket = o.ticket;
         if (ticket === undefined)
           ticket = (await call({ method: 'POST', url: '/api/ws-ticket', ...c })).json().ticket;
         const headers: Record<string, string> = {};
         if (o.origin !== null) headers.origin = o.origin ?? ORIGIN;
-        const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?ticket=${ticket}`, { headers });
+        const ws = new WebSocket(`ws://127.0.0.1:${port}${path}?ticket=${ticket}${extra}`, { headers });
         const received: TestSocket['received'] = [];
         const waiters: (() => void)[] = [];
         ws.on('message', (d) => {
@@ -257,13 +284,15 @@ export async function makeKit(
               ).unref();
             }),
         };
-      },
-    };
+      }
+    }
   };
 
   return {
     app,
     mgr,
+    terms,
+    pty,
     push,
     connections,
     anthropic,

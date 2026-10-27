@@ -25,6 +25,7 @@ An ant's desk shows its state: **idle**, **thinking**, **running a tool**, **nee
 - **Sessions:** start, resume, rename, pin, archive and delete. Pick the folder, model, effort and permission mode for each one.
 - **Approvals you can read:** a waiting tool call shows the command, the file content or a diff before you press Approve or Deny.
 - **Subagents:** one ant per subagent with its state, current tool, tokens, log and final report. Stop one, or send a follow-up through the lead.
+- **Terminal:** a real shell next to the chat, opened in the session's folder. Run a dev server or the tests while the agent works. Shells keep running when you close the browser, and a reload shows the last 5,000 lines. Below 900 px it is a Chat | Terminal switch with a key bar. It is a shell as the service user, so read the security notes below.
 - **Meters:** context window use and cost per session, and plan usage limits when your login supports them.
 - **Phone friendly:** installable as a PWA, usable one-handed, with push notifications when an approval is waiting.
 - **Access control:** passkey sign-in (or password plus authenticator code), a fresh check before risky actions, and a 15 minute lockout after failed sign-ins. See [ADR 0002](docs/adr/0002-authentication-and-trust-boundary.md).
@@ -51,7 +52,7 @@ Antlings is for one owner on a small VPS (about 2 GB of memory and 2 vCPUs).
 
 - A Linux server with systemd (tested on Ubuntu 24.04), Node 24+, a user with `sudo`, and [Claude Code](https://code.claude.com/docs/en/setup) installed system-wide.
 - [Caddy](https://caddyserver.com) and a domain whose DNS A record points at the server. Passkeys need HTTPS.
-- Docker, Git and key-based SSH on your own machine. The release is built in a container, so the server needs no compiler.
+- Docker, Git and key-based SSH on your own machine. The release is built in a container (which installs `python3`, `make` and `g++` to compile `node-pty`), so the server needs no compiler.
 
 **1.** Add this line once to `/etc/caddy/Caddyfile` on the server:
 
@@ -91,6 +92,7 @@ Settings live in `/etc/antlings/antlings.env`. The full list is in [.env.example
 Antlings lets a browser run an AI agent that can read and write files and run commands on your server. Treat it like SSH access.
 
 - **The agent runs as the same Unix user as the service.** A prompt-injected agent can read the service's settings and database. Approvals protect against a stolen browser session, not against the agent itself. Use a dedicated API key with a spend cap, keep Bypass mode rare, and do not point it at folders that hold secrets.
+- **The terminal is a shell as the service user, with no approvals and no passkey prompt.** A stolen browser session gets a shell. Sessions, the Origin check and the audit log of opens and closes are the protection.
 - **The agent can reach everything listening on `127.0.0.1`** on that server. Add a firewall rule for the `antlings` user, see [the runbook](docs/RUNBOOK.md#known-limits).
 
 The full threat model is in [ADR 0002](docs/adr/0002-authentication-and-trust-boundary.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).

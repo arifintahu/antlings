@@ -13,6 +13,8 @@ import { PushService } from './push.js';
 import { repairStoredHistory, SessionManager } from './sessions.js';
 import { sdkTranscripts } from './transcripts.js';
 import { systemClock } from './util.js';
+import { nodePtyFactory } from './terminals/pty.js';
+import { Terminals } from './terminals/registry.js';
 import { wireApp } from './wiring.js';
 
 async function main(): Promise<void> {
@@ -43,10 +45,15 @@ async function main(): Promise<void> {
     home: homedir(),
     clock: systemClock,
   });
+  const terms = new Terminals({
+    pty: nodePtyFactory(),
+    clock: systemClock,
+    audit: (kind, detail) => auth.audit(kind, undefined, detail),
+  });
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, connections, push });
+      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, connections, terms, push });
     },
   });
   const reaper = setInterval(() => mgr.reapIdle(), 60_000);
@@ -56,6 +63,7 @@ async function main(): Promise<void> {
   const stop = async () => {
     clearInterval(reaper);
     mgr.closeAll();
+    terms.killAll();
     await app.close();
     db.close();
     process.exit(0);
