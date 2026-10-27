@@ -194,6 +194,25 @@ test('phone layout at 375px: no sideways scroll, targets 44px', async ({ page })
   expect(small).toEqual([]);
 });
 
+test('agent strip is one compact row on a phone and when the lead works alone', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await newSession(page);
+  await say(page, 'hello');
+  const office = agentOffice(page);
+  await expect(office.locator('.worker .act').first()).toHaveText('Done');
+  expect((await office.boundingBox())!.height).toBeLessThanOrEqual(56);
+  await page.getByRole('button', { name: /Agents \(1\)/ }).click();
+  await expect(office.locator('.worker').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Hide' }).click();
+  expect((await office.boundingBox())!.height).toBeLessThanOrEqual(56);
+  await expectAccessible(page, 'compact strip on a phone');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  expect((await office.boundingBox())!.height).toBeLessThanOrEqual(56); // alone: still compact on desktop
+  await say(page, 'agent');
+  await expect(office.getByRole('button', { name: /Explore: look around/ })).toBeVisible();
+  expect((await office.boundingBox())!.height).toBeGreaterThan(100); // with a subagent: the full floor
+});
+
 test('Escape closes the sidebar drawer, the context panel and the session menu', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await newSession(page);
