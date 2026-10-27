@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
 ### Added
 
 - Session terminal: a pty shell per session, started in the session's folder, shown beside the chat (desktop) or behind a Chat | Terminal switch with a key bar (below 900 px). Up to 4 running shells per session and 12 in total, about 5,000 lines of scrollback replayed on reattach. Shells survive a browser reload and end on archive, delete, tab close or server restart. New routes `/api/sessions/:id/terminals` and a WebSocket at `/ws/term`. Open and close are audited.
@@ -12,6 +14,17 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Changed
 
 - The release build installs `python3`, `make` and `g++` in the build container to compile `node-pty`.
+
+### Fixed
+
+- A session that the idle reaper closed before its first message could not be used again: the next message tried to resume a transcript that did not exist ("No conversation found") and archive failed too. It now starts the session instead of resuming it when there is no transcript.
+- A numbered list with blank lines between its items was shown as separate lists, so every item read "1.". The list now keeps its numbering.
+
+### Known limitations
+
+- A shell's `PATH` comes from the service user's login shell, so `node` and `pnpm` there may differ from the service's own Node. On the reference VPS the shell found Node 20 and no `pnpm`.
+- The terminal is a direct shell as the service user and needs no passkey step. Environment filtering keeps `ANTLINGS_*` and API keys out of the shell's environment but is not a boundary: the shell can still read the env file.
+- Archiving a session shows no message in the page when the server refuses it.
 
 ## [0.2.0] - 2026-10-22
 
