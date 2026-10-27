@@ -4,7 +4,7 @@ Thanks for helping. Antlings is a small project with one maintainer, so small, f
 
 ## Setup
 
-You need Node 22 or newer and pnpm 9.
+You need Node 24 or newer and pnpm 9.
 
 ```bash
 pnpm install
@@ -14,7 +14,7 @@ pnpm build
 pnpm e2e        # Playwright against a fake agent; needs Chrome installed
 ```
 
-You do not need a Claude login to develop. The tests and `pnpm --filter @antlings/server exec tsx src/e2e/server.ts` use a fake agent. The live SDK test is opt-in (`ANTLINGS_LIVE=1`) and spends a few cents.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full setup. You do not need a Claude login to develop. The tests and `pnpm --filter @antlings/server exec tsx src/e2e/server.ts` use a fake agent. The live SDK test is opt-in (`ANTLINGS_LIVE=1`) and spends a few cents.
 
 ## Pull requests
 

@@ -1,182 +1,103 @@
-# Antlings
+<h1 align="center">Antlings</h1>
 
-**Your Claude Code colony, in a browser.**
+<p align="center"><b>Your Claude Code colony, in a browser.</b></p>
 
-Antlings is a small pixel-art colony that runs [Claude Code](https://code.claude.com) on your own Linux server. Start a task from your laptop, close the lid, and check on it from your phone. Every session has a **lead ant** with a crown. Every subagent it starts becomes a **worker ant** at its own desk, so you can see at a glance who is thinking, running a tool, waiting for your approval, or done.
+<p align="center">
+  <a href="https://github.com/arifintahu/antlings/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/arifintahu/antlings/ci.yml?branch=main&style=flat-square&label=ci" alt="CI status"></a>
+  <a href="https://github.com/arifintahu/antlings/releases"><img src="https://img.shields.io/github/v/release/arifintahu/antlings?style=flat-square&label=release" alt="Latest release"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%E2%89%A524-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 24 or newer"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT"></a>
+</p>
+
+Antlings is a self-hosted web UI for [Claude Code](https://code.claude.com) on your own Linux server. Start a task from your laptop, close the lid, and check on it from your phone. Every session has a **lead ant** with a crown. Every subagent it starts becomes a **worker ant** at its own desk, so you can see at a glance who is thinking, running a tool, waiting for your approval, or done.
 
 ![Antlings on a desktop: sessions on the left, the lead ant and two worker ants on top, a diff waiting for approval below](docs/screens/desktop-conversation.png)
 
-<p>
-  <img src="docs/screens/phone-conversation.png" alt="Conversation on a phone with an Edit waiting for approval" width="260">
-  <img src="docs/screens/phone-agents.png" alt="The whole team of ants on a phone" width="260">
-  <img src="docs/screens/phone-sessions.png" alt="The session list drawer on a phone" width="260">
-</p>
 
-The Security page: passkeys, signed-in devices, notifications, server status and recent activity.
+## Why ants
 
-![The Security page with a section bar, one card per section and status tiles](docs/screens/desktop-security.png)
+In a terminal, Claude Code with subagents is a scroll of text. You cannot tell which helper is stuck, which one waits for a yes from you, and which one has finished. Ants do the same thing at a small scale: many workers, each with one job, coordinated by one that knows the plan.
 
-## The story
-
-Claude Code works like a colony. One agent takes your request and breaks it up, then hands the pieces to helpers that go off and do them. In a terminal that looks like a scroll of text. You cannot tell which helper is stuck, which one is waiting for a yes from you, and which one has finished.
-
-Ants fit because they do the same thing at a small scale. Many tiny workers, each with one job, coordinated by one that knows the plan. So:
-
-- The **lead ant** wears a crown and sits at the main desk for the session. It has a name, such as Eli, Ana or Zed.
-- Each **worker ant** is a subagent. It gets its own desk, vest colour and name, and appears when the lead starts it.
-- An ant's desk shows what it is doing: **idle**, **thinking**, **running a tool**, **needs approval** (an exclamation mark above its head), **done**, or **error**. The same state is also written as text under the ant, so nothing depends on the animation.
-- When you finish the first-run setup, the page says "Your colony is ready" and a crowned ant moves in.
-
-The ants are drawn in code on a 32x28 pixel canvas, not shipped as images. They stop moving when your system asks for reduced motion.
+An ant's desk shows its state: **idle**, **thinking**, **running a tool**, **needs approval**, **done** or **error**. The state is also written as text under the ant. The ants are drawn in code on a 32x28 canvas, and they stop moving when your system asks for reduced motion.
 
 ## Features
 
-- **Sessions:** start, resume, rename, pin, archive and delete Claude Code sessions. Pick the folder, model, effort and permission mode for each one. Sessions are grouped by project and searchable.
-- **Approvals you can read:** a waiting tool call shows the command, the file content, or a diff before you press Approve or Deny.
-- **Streaming and markdown:** answers stream in as they are written and render as safe markdown. Links and code blocks never run anything.
+- **Sessions:** start, resume, rename, pin, archive and delete. Pick the folder, model, effort and permission mode for each one.
+- **Approvals you can read:** a waiting tool call shows the command, the file content or a diff before you press Approve or Deny.
 - **Subagents:** one ant per subagent with its state, current tool, tokens, log and final report. Stop one, or send a follow-up through the lead.
-- **Meters:** context window use per session, cost per session, and plan usage limits when your login supports them.
+- **Meters:** context window use and cost per session, and plan usage limits when your login supports them.
 - **Phone friendly:** installable as a PWA, usable one-handed, with push notifications when an approval is waiting.
-- **Access control:** passkey sign-in, or password plus authenticator code. A fresh check is asked before risky actions such as Bypass mode or deleting a session. Failed sign-ins lock out for 15 minutes. See [ADR 0002](docs/adr/0002-authentication-and-trust-boundary.md).
-- **Small:** about 100 MB of memory when idle. Each running Claude Code session adds roughly 200 MB.
-- **Accessible:** every state has a text label next to its animation, the layout works at 375 px, `prefers-reduced-motion` is respected, and the browser tests run axe in light and dark themes.
-
-## How it works
-
-```
-Phone or laptop (PWA) ──HTTPS──> Caddy ──127.0.0.1──> Antlings (Node)
-                                                        │ one streaming query() per session
-                                                        ▼
-                                          Claude Agent SDK → Claude Code
-```
-
-The backend keeps one Claude Code process per running session, logs every event with a sequence number, and replays what a page missed when it reconnects. Transcripts stay in Claude Code's own `~/.claude` folder. More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Access control:** passkey sign-in (or password plus authenticator code), a fresh check before risky actions, and a 15 minute lockout after failed sign-ins. See [ADR 0002](docs/adr/0002-authentication-and-trust-boundary.md).
+- **Small and accessible:** about 100 MB idle, plus roughly 200 MB per running session. The layout works at 375 px, and the browser tests run axe in light and dark.
 
 ## Try it locally
 
-You need Node 22 or newer and [pnpm](https://pnpm.io) 9. This runs the whole app against a **fake agent**, so you do not need a Claude login and nothing is spent:
+No Claude login needed. This runs the whole app against a fake agent:
 
 ```bash
 git clone https://github.com/arifintahu/antlings.git
 cd antlings
-pnpm install
-pnpm build                                                  # builds the shared package the server imports
+pnpm install && pnpm build
 pnpm --filter @antlings/server exec tsx src/e2e/server.ts   # http://localhost:3199
 ```
 
-To run it against real Claude Code on your own machine, set `ANTHROPIC_API_KEY` (see [Claude login](#claude-login)):
-
-```bash
-pnpm build
-cp .env.example .env                  # then add ANTHROPIC_API_KEY=... to it
-node server/dist/cli.js gen-env       # prints three secret lines; paste them over the empty ANTLINGS_SECRET_KEY, ANTLINGS_VAPID_PUBLIC and ANTLINGS_VAPID_PRIVATE lines in .env
-pnpm --filter @antlings/server dev    # http://localhost:3100
-```
-
-In a second terminal, print the one-time setup code:
-
-```bash
-ANTLINGS_ENV_FILE=../.env pnpm --filter @antlings/server exec tsx src/cli.ts setup
-```
-
-Open the page, enter the setup code, and register your passkey.
+Requires Node 24+ and [pnpm](https://pnpm.io) 9. Setup code, hot reload and running against real Claude Code are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Deploy to your own server
 
-Antlings is meant for one owner on a small VPS. Plan for about 2 GB of memory and 2 vCPUs. The installer refuses to run with less than 600 MB free.
+Antlings is for one owner on a small VPS (about 2 GB of memory and 2 vCPUs).
 
 **You need:**
 
-- A Linux server with systemd (tested on Ubuntu 24.04), Node 22 or newer, and a user with `sudo`.
-- [Claude Code](https://code.claude.com/docs/en/setup) installed system-wide on the server, for example at `/usr/local/bin/claude`.
-- [Caddy](https://caddyserver.com) on the server, with a domain whose DNS A record points at it. Caddy gets the HTTPS certificate. Passkeys need HTTPS (or `localhost`).
-- Docker, Git and key-based SSH to the server on your own machine. The release is built in a container so the server needs no compiler.
+- A Linux server with systemd (tested on Ubuntu 24.04), Node 24+, a user with `sudo`, and [Claude Code](https://code.claude.com/docs/en/setup) installed system-wide.
+- [Caddy](https://caddyserver.com) and a domain whose DNS A record points at the server. Passkeys need HTTPS.
+- Docker, Git and key-based SSH on your own machine. The release is built in a container, so the server needs no compiler.
 
-**1. Let Caddy load the Antlings file.** Add this line once to `/etc/caddy/Caddyfile` on the server, or use a `conf.d` folder that is already imported:
+**1.** Add this line once to `/etc/caddy/Caddyfile` on the server:
 
 ```
 import /etc/caddy/antlings.caddy
 ```
 
-**2. Deploy.** On your machine:
+**2.** Deploy from your machine:
 
 ```bash
 VPS_SSH=you@your-server DOMAIN=ants.example.com ./deploy/deploy.sh
 ```
 
-This builds a release, copies it over, and runs `deploy/install.sh` on the server. The installer checks the file checksum, creates an unprivileged `antlings` user, installs a hardened systemd service bound to `127.0.0.1:3100`, writes `/etc/antlings/antlings.env` with generated secrets, writes the Caddy site, reloads Caddy, and checks `/health`. If the new release does not answer, it rolls back to the previous one. It never touches your firewall, databases or other sites. Read what it will do first with `sudo ./deploy/install.sh --dry-run` (see the [runbook](docs/RUNBOOK.md)).
+This builds a release, copies it over and runs `deploy/install.sh`. The installer creates an unprivileged `antlings` user, installs a hardened systemd service on `127.0.0.1:3100`, generates secrets, writes the Caddy site and checks `/health`. If the new release does not answer, it rolls back. It never touches your firewall, databases or other sites. Preview it with `sudo ./deploy/install.sh --dry-run`.
 
-**3. Print the setup code** on the server:
+**3.** Print the one-time setup code on the server:
 
 ```bash
 sudo -u antlings antlings setup
 ```
 
-**4. Open `https://ants.example.com`**, enter the code (valid for 15 minutes) and create your passkey. Optionally add a backup password and authenticator code on the Security page.
+**4.** Open `https://ants.example.com`, enter the code (valid for 15 minutes) and create your passkey.
 
-**5. Connect Claude and GitHub** on the Connections page. No more SSH is needed (see below).
+**5.** Open **Connections** in the sidebar to connect Claude and GitHub. Each change asks for a fresh passkey check.
 
-Do not have a domain yet? Leave out `DOMAIN` to keep the service on `127.0.0.1` and reach it through an SSH tunnel: `ssh -L 3100:127.0.0.1:3100 you@your-server`, then open `http://localhost:3100`.
+No domain yet? Leave out `DOMAIN` and use an SSH tunnel: `ssh -L 3100:127.0.0.1:3100 you@your-server`, then open `http://localhost:3100`.
 
-### Connections: Claude and GitHub
+### Connecting Claude
 
-Open **Connections** in the sidebar (or follow the button at the end of first-run setup). A "Set up Claude and GitHub" prompt sits above it until both are connected. Each change asks for a fresh passkey check and is written to the audit log.
+- **API key (default):** paste an Anthropic API key on the Connections page. Antlings checks it, then stores it encrypted. Anthropic's terms ask products built on the Agent SDK to use API keys.
+- **Subscription (personal use only):** relays the sign-in of the unmodified `claude` binary. Read [ADR 0003](docs/adr/0003-claude-login-terms.md) first. You take that terms risk yourself.
 
-![The Connections page with a GitHub device code waiting for approval](docs/screens/desktop-connections.png)
-
-- **GitHub:** press Connect. The page shows a one-time code and an Open GitHub button; approve on github.com from any device. Antlings runs `gh auth login --web` and `gh auth setup-git` as the service user, so `git push` over HTTPS works in your sessions. You can also set the git name and email for commits. The installer adds the `gh` package with `apt-get`; pass `--no-gh` to skip it.
-- **Claude, API key (default):** paste an Anthropic API key. Anthropic's terms ask products built on the Agent SDK to use API keys. Antlings checks it against the models endpoint (free), then stores it encrypted in its database. It is never shown again.
-- **Claude, subscription:** for personal use only. Tick the terms box and Antlings relays the sign-in of the unmodified `claude` binary: open the link, sign in, paste the code back. Read [ADR 0003](docs/adr/0003-claude-login-terms.md) first. You take that terms risk yourself.
-
-The command-line way still works: `ANTHROPIC_API_KEY=...` in `/etc/antlings/antlings.env`, or `sudo -u antlings -H claude login`. A key saved on the Connections page wins over the env file.
-
-### Configuration
-
-Settings live in `/etc/antlings/antlings.env` (restart the service after a change). The common ones:
-
-| Setting | Meaning | Default |
-|---|---|---|
-| `ANTLINGS_ORIGIN` | The exact public address, for example `https://ants.example.com`. Used for the Origin check and cookies. | set by the installer |
-| `ANTLINGS_AUTH_MODE` | `apikey` or `subscription` | `apikey` |
-| `ANTLINGS_MAX_SESSIONS` | Claude Code processes running at once | 2 |
-| `ANTLINGS_MAX_SUBAGENTS` | Concurrent subagents per session | 3 |
-| `ANTLINGS_IDLE_HOURS` | Sign-in idle timeout | 12 |
-| `ANTLINGS_HOME` | Root of the folder picker | `/home/antlings` |
-| `ANTLINGS_EVENT_KEEP` | Newest events kept per session | 20000 |
-
-The full list is in [.env.example](.env.example). Backups, updates, rollback, key rotation, fail2ban and uninstalling are in the [runbook](docs/RUNBOOK.md).
+Settings live in `/etc/antlings/antlings.env`. The full list is in [.env.example](.env.example). Backups, updates, rollback, key rotation and uninstalling are in the [runbook](docs/RUNBOOK.md).
 
 ## Security: read this before you expose it
 
 Antlings lets a browser run an AI agent that can read and write files and run commands on your server. Treat it like SSH access.
 
-- **The agent runs as the same Unix user as the service.** A prompt-injected agent can read the service's settings and database, and can run `antlings reset-access`. Approvals protect against a stolen browser session, not against the agent itself. Use a dedicated API key with a spend cap, keep Bypass mode rare, and do not point it at folders that hold secrets.
-- **The agent can reach everything listening on `127.0.0.1`** on that server (databases, other services). Add a firewall rule for the `antlings` user, see [the runbook](docs/RUNBOOK.md#known-limits).
-- Keep the server patched, use a long passkey-protected sign-in, and put your own address in the fail2ban `ignoreip` list.
+- **The agent runs as the same Unix user as the service.** A prompt-injected agent can read the service's settings and database. Approvals protect against a stolen browser session, not against the agent itself. Use a dedicated API key with a spend cap, keep Bypass mode rare, and do not point it at folders that hold secrets.
+- **The agent can reach everything listening on `127.0.0.1`** on that server. Add a firewall rule for the `antlings` user, see [the runbook](docs/RUNBOOK.md#known-limits).
 
 The full threat model is in [ADR 0002](docs/adr/0002-authentication-and-trust-boundary.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
-## Development
+## Docs and contributing
 
-```bash
-pnpm install
-pnpm lint            # eslint and prettier
-pnpm test            # server, shared and web unit tests, plus svelte-check
-pnpm build
-pnpm e2e             # Playwright against the fake agent, uses the installed Chrome
-```
-
-The opt-in live test calls the real SDK with Haiku and is capped at 0.10 USD: `ANTLINGS_LIVE=1 pnpm --filter @antlings/server test`.
-
-| Path | Contents |
-|---|---|
-| `server/` | Fastify backend: auth, sessions, WebSocket protocol, folder picker, push |
-| `web/` | Svelte 5 app, ant sprites (`src/ants/draw.ts`), PWA files, Playwright tests (`e2e/`) |
-| `shared/` | Protocol types and request schemas used by both |
-| `deploy/` | systemd unit, Caddy snippet, fail2ban files, installer, release build, smoke tests |
-| `docs/` | [Architecture](docs/ARCHITECTURE.md), [runbook](docs/RUNBOOK.md), [SDK notes](docs/sdk-notes.md), [decision records](docs/adr/) |
-
-The screenshots above are made by `pnpm --filter @antlings/web e2e showcase`. Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
+[Development](docs/DEVELOPMENT.md) · [Architecture](docs/ARCHITECTURE.md) · [Runbook](docs/RUNBOOK.md) · [SDK notes](docs/sdk-notes.md) · [Decision records](docs/adr/) · [Contributing](CONTRIBUTING.md)
 
 ## License
 
