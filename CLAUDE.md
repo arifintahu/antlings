@@ -13,7 +13,7 @@ Start with [README.md](README.md), then [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Rules for this project
 
-- Package manager: pnpm. Language: TypeScript on Node 22 or newer (24 on the server).
+- Package manager: pnpm. Language: TypeScript on Node 24 or newer.
 - Write tests first for bugs. Always test authentication, session handling, folder-picker path checks and anything that deletes data.
 - Run the formatter, linter and tests before saying work is done, and report the real output.
 - Branch off `main`. Conventional Commits. Commit and push only when asked.

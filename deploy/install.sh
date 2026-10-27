@@ -121,7 +121,7 @@ if command -v node >/dev/null 2>&1; then
   NODE_BIN=$(command -v node)
   node_major=$(node -p 'process.versions.node.split(".")[0]')
   note "node $(node -v) at $NODE_BIN"
-  [ "$node_major" -ge 22 ] || die "Node 22 or newer is required"
+  [ "$node_major" -ge 24 ] || die "Node 24 or newer is required"
   case "$NODE_BIN" in
     /home/*|/root/*) die "node is installed under a home folder ($NODE_BIN). Install Node system-wide so the antlings user can run it." ;;
   esac
