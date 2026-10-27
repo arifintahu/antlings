@@ -13,3 +13,7 @@ Choices made while building:
 ## Consequences
 
 - No dependency needs a compiler on the VPS. If a prebuilt binary is missing at install time, the install fails instead of falling back to a compiler.
+
+## Amendment 2026-10-27: Node 24 minimum
+
+`engines` is now `>=24` and the installer requires Node 24. CI, the release build and the container tests already ran Node 24, and a local machine on Node 24 is the reference for development.
