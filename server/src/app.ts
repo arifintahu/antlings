@@ -49,13 +49,14 @@ export interface AppOptions {
   extend?: (app: FastifyInstance) => void | Promise<void>;
 }
 
-export function securityHeaders(origin: string): Record<string, string> {
+/** `styleNonce` is for the HTML page only: xterm.js injects <style> elements, which a nonce allows without 'unsafe-inline'. */
+export function securityHeaders(origin: string, styleNonce?: string): Record<string, string> {
   const ws = origin.replace(/^http/, 'ws');
   return {
     'Content-Security-Policy': [
       "default-src 'self'",
       "script-src 'self'",
-      "style-src 'self'",
+      styleNonce ? `style-src 'self' 'nonce-${styleNonce}'` : "style-src 'self'",
       "img-src 'self' data: blob:",
       "font-src 'self'",
       `connect-src 'self' ${ws}`,
@@ -92,7 +93,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const headers = securityHeaders(config.origin);
   app.addHook('onSend', async (req, reply) => {
     if (req.attemptId !== undefined && reply.statusCode < 400) auth.releaseAttempt(req.attemptId);
-    for (const [k, v] of Object.entries(headers)) reply.header(k, v);
+    for (const [k, v] of Object.entries(headers)) if (!reply.hasHeader(k)) reply.header(k, v); // the page sets its own CSP (nonce)
     if (req.url.startsWith('/api/') || req.url === '/health') reply.header('Cache-Control', 'no-store');
   });
 
@@ -364,6 +365,6 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.post('/api/ws-ticket', async (req) => ({ ticket: auth.createTicket(req.sess!) }));
 
   await opts.extend?.(app);
-  if (config.staticDir) await registerStatic(app, config.staticDir);
+  if (config.staticDir) await registerStatic(app, config.staticDir, config.origin);
   return app;
 }
