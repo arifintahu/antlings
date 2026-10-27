@@ -16,6 +16,8 @@ import { systemClock } from '../util.js';
 import { fileURLToPath } from 'node:url';
 import { Connections } from '../connections/service.js';
 import { ConnectionSettings } from '../connections/store.js';
+import { FakePtyFactory } from '../terminals/fakePty.js';
+import { Terminals } from '../terminals/registry.js';
 import { wireApp } from '../wiring.js';
 
 const port = Number(process.env.E2E_PORT ?? 3199);
@@ -74,15 +76,23 @@ const connections = new Connections({
   clock: { now: () => Date.now() + clockOffset },
 });
 
+const pty = new FakePtyFactory({ shell: true });
+const terms = new Terminals({
+  pty,
+  clock: systemClock,
+  audit: (k, d) => auth.audit(k, undefined, d),
+});
 let sockets: ReturnType<typeof wireApp> | undefined;
 const app = await buildApp({
   auth,
   extend: (a) => {
-    sockets = wireApp(a, { auth, mgr, folders, transcripts, connections });
+    sockets = wireApp(a, { auth, mgr, folders, transcripts, connections, terms });
     const pub = { config: { public: true } };
     // Returns a fresh setup code. Resets access first when something is already set up.
     a.post('/__e2e/reset', pub, async () => {
       mgr.closeAll();
+      terms.killAll();
+      pty.spawned.length = 0;
       transcripts.items.clear();
       db.prepare('DELETE FROM event_log').run();
       db.prepare('DELETE FROM session_meta').run();
@@ -110,9 +120,11 @@ const app = await buildApp({
       mgr.emit(b.sessionId, { k: 'notice', message: b.text });
       return { ok: true };
     });
+    // What the browser typed into the fake shells, in order. Lets a test check keys that print nothing.
+    a.get('/__e2e/terminal-written', pub, async () => ({ written: pty.spawned.flatMap((p) => p.written) }));
     a.post('/__e2e/drop-sockets', pub, async () => {
       let n = 0;
-      for (const c of sockets?.clients ?? []) {
+      for (const c of [...(sockets?.wss.clients ?? []), ...(sockets?.termWss.clients ?? [])]) {
         c.terminate();
         n++;
       }

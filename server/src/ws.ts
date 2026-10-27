@@ -11,7 +11,7 @@ import type { Transcripts } from './transcripts.js';
 export const WS_MAX_PAYLOAD = 256 * 1024;
 const RECHECK_MS = 15_000;
 
-function refuse(socket: Duplex, code: number, text: string): void {
+export function refuse(socket: Duplex, code: number, text: string): void {
   socket.write(`HTTP/1.1 ${code} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   socket.destroy();
 }
@@ -31,6 +31,7 @@ export function attachWebSocket(
 
   app.server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://x');
+    if (url.pathname === '/ws/term') return; // terminals/ws.ts handles this path
     if (url.pathname !== '/ws') return refuse(socket, 404, 'Not Found');
     if (req.headers.origin !== auth.config.origin) return refuse(socket, 403, 'Forbidden');
     const sess = auth.consumeTicket(url.searchParams.get('ticket') ?? undefined);
