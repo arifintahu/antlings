@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-27
+
+### Added
+
+- The sidebar footer shows the running version ("About · v0.4.0"), read from the server's `package.json` through `GET /api/status`. It opens an About dialog with the version, a short description, links to the release notes for that version and to the source, and the license.
+
 ## [0.3.0] - 2026-10-27
 
 ### Added
