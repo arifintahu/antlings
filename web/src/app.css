@@ -1787,3 +1787,169 @@ a.btn {
 .setup-hint:hover {
   border-color: var(--amber);
 }
+
+/* terminal panel */
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.col[hidden] {
+  display: none;
+}
+.termside {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--line);
+}
+@media (max-width: 899px) {
+  .termside {
+    flex: 1;
+    border-left: 0;
+  }
+}
+.divider {
+  flex: none;
+  width: 10px;
+  margin: 0 -4px 0 -6px;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.divider:hover,
+.divider:focus-visible {
+  background: var(--line);
+}
+.termbtn {
+  position: relative;
+}
+.termbtn.on {
+  background: var(--surface2);
+}
+.termbtn .dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+}
+.termswitch {
+  display: flex;
+  border-bottom: 2px solid var(--line);
+}
+.termswitch button {
+  flex: 1;
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  font-size: 20px;
+}
+.termswitch button[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+}
+.termpanel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.termbar {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid var(--line);
+}
+.termtabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+}
+.termtab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+}
+.termtab.on {
+  border-bottom-color: var(--accent);
+  background: var(--surface2);
+}
+.tabmain {
+  min-height: 44px;
+  padding: 0 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  line-height: 1;
+}
+.tabmain small {
+  color: var(--muted);
+  font-size: 16px;
+}
+.tabclose {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+}
+.tabclose svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+}
+.termbody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 0 6px;
+}
+.termview {
+  flex: 1;
+  min-height: 0;
+}
+.termview[hidden] {
+  display: none;
+}
+.termempty {
+  padding: 12px;
+  color: var(--muted);
+}
+.keybar {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  border-top: 2px solid var(--line);
+  flex-wrap: wrap;
+}
+.keybar .btn {
+  flex: 1 1 22%;
+  padding: 0 8px;
+}
+.keybar .btn[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}

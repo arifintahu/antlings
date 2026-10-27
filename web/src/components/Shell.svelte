@@ -12,6 +12,7 @@
   import Security from './Security.svelte';
   import SessionSettings from './SessionSettings.svelte';
   import Sidebar from './Sidebar.svelte';
+  import TerminalPanel from './TerminalPanel.svelte';
 
   let drawer = $state(false);
   let menuOpen = $state(false);
@@ -40,6 +41,51 @@
     mq.addEventListener('change', upd);
     return () => mq.removeEventListener('change', upd);
   });
+
+  // ---- terminal panel ----
+  const termOpen = $derived(!!app.activeId && !!app.termOpen[app.activeId]);
+  const shells = $derived(app.runningTerminals);
+  /** Width of the panel as a share of the main area, kept per browser. */
+  let termFrac = $state(readFrac());
+  let dragging = false;
+  let bodyEl: HTMLElement | undefined = $state();
+
+  function readFrac(): number {
+    try {
+      const v = Number(localStorage.getItem('antlings.termWidth'));
+      return v >= 0.25 && v <= 0.7 ? v : 0.45;
+    } catch {
+      return 0.45;
+    }
+  }
+  function setFrac(v: number) {
+    termFrac = Math.min(0.7, Math.max(0.25, v));
+    try {
+      localStorage.setItem('antlings.termWidth', String(termFrac));
+    } catch {
+      /* private window: the width is not remembered */
+    }
+  }
+  function drag(ev: PointerEvent) {
+    if (!dragging || !bodyEl) return;
+    const r = bodyEl.getBoundingClientRect();
+    setFrac((r.right - ev.clientX) / r.width);
+  }
+  function dividerKey(ev: KeyboardEvent) {
+    if (ev.key === 'ArrowLeft') setFrac(termFrac + 0.05);
+    else if (ev.key === 'ArrowRight') setFrac(termFrac - 0.05);
+    else return;
+    ev.preventDefault();
+  }
+  async function toggleTerminal(open = !termOpen) {
+    const id = app.activeId;
+    if (!id) return;
+    app.termOpen[id] = open;
+    if (open && (app.terminals[id] ?? []).length === 0) {
+      await app.refreshTerminals(id);
+      if ((app.terminals[id] ?? []).length === 0) await app.openTerminal(id, { cols: 80, rows: 24 });
+    }
+  }
 
   const view = $derived(app.active);
   const summary = $derived(app.activeSummary);
@@ -178,7 +224,7 @@
   }
 </script>
 
-<svelte:window onkeydown={esc} onclick={outside} />
+<svelte:window onkeydown={esc} onclick={outside} onpointermove={drag} onpointerup={() => (dragging = false)} />
 
 <div class="app" inert={app.securityOpen || app.connectionsOpen}>
   <Sidebar
@@ -244,6 +290,17 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="currentColor" /></svg>
           </button>
         {/if}
+        <button
+          class="iconbtn termbtn"
+          class:on={termOpen}
+          type="button"
+          aria-label="Terminal{shells ? `, ${shells} running` : ''}"
+          aria-pressed={termOpen}
+          onclick={() => toggleTerminal()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l6 6-6 6M12 18h8" /></svg>
+          {#if shells}<span class="dot" aria-hidden="true"></span>{/if}
+        </button>
         <button class="iconbtn" id="sessbtn" type="button" aria-label="Session actions" aria-haspopup="menu" aria-expanded={menuOpen} aria-controls="sessmenu"
           onclick={() => (menuOpen = !menuOpen)}>
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><rect x="3" y="10" width="4" height="4" /><rect x="10" y="10" width="4" height="4" /><rect x="17" y="10" width="4" height="4" /></svg>
@@ -280,6 +337,14 @@
     {/if}
 
     {#if view}
+      {#if termOpen && !desktop}
+        <div class="termswitch" role="tablist" aria-label="View">
+          <button type="button" role="tab" aria-selected="false" onclick={() => toggleTerminal(false)}>Chat</button>
+          <button type="button" role="tab" aria-selected="true">Terminal</button>
+        </div>
+      {/if}
+      <div class="body" bind:this={bodyEl}>
+      <div class="col" hidden={termOpen && !desktop}>
       <Office {view} />
       <main class="chat" id="chat" bind:this={chatEl} aria-label={ant ? `Subagent ${ant.subagentType}` : 'Conversation'} tabindex="-1" onscroll={() => { if (chatEl && chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 200) follow = false; }}>
         {#if ant}<AgentDetail {ant} />{:else}<Conversation {view} {archived} />{/if}
@@ -294,6 +359,32 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
         </button>
       </form>
+      </div>
+      {#if termOpen}
+        {#if desktop}
+          <!-- A window splitter is focusable and takes arrow keys, which Svelte does not know for role=separator. -->
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+          <div
+            class="divider"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize terminal"
+            aria-valuemin="25"
+            aria-valuemax="70"
+            aria-valuenow={Math.round(termFrac * 100)}
+            tabindex="0"
+            onpointerdown={(e) => {
+              dragging = true;
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            }}
+            onkeydown={dividerKey}
+          ></div>
+        {/if}
+        <div class="termside" style:width={desktop ? `${termFrac * 100}%` : '100%'}>
+          {#key app.activeId}<TerminalPanel sessionId={app.activeId!} narrow={!desktop} />{/key}
+        </div>
+      {/if}
+      </div>
     {:else}
       <main class="chat" id="chat" tabindex="-1" aria-label="Welcome">
         <div class="card">
