@@ -566,6 +566,55 @@ textarea:disabled {
 .office.expanded .empty {
   display: block;
 }
+.office.compact {
+  display: flex;
+  align-items: center;
+}
+.office.compact .floor {
+  order: 1;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  padding: 0 8px;
+}
+.office.compact .ohead {
+  order: 2;
+  flex: none;
+  min-height: 48px;
+}
+.office.compact .empty {
+  display: none;
+}
+.office.compact .worker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
+  width: auto;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 8px;
+  text-align: left;
+  --s: 1;
+}
+.office.compact .worker:not([aria-current='true']) {
+  display: none;
+}
+.office.compact .worker canvas {
+  grid-row: 1 / span 2;
+}
+.office.compact .worker .nm {
+  margin: 0;
+  align-self: end;
+}
+.office.compact .worker .act {
+  align-self: start;
+}
+@media (max-width: 899px) {
+  .office.compact #summary {
+    display: none;
+  }
+}
 
 /* conversation + agent detail */
 .chat {

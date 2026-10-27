@@ -6,7 +6,16 @@
 
   let { view }: { view: SessionView } = $props();
   let expanded = $state(false);
+  const phone = window.matchMedia('(max-width: 899px)');
+  let narrow = $state(phone.matches);
+  $effect(() => {
+    const on = () => (narrow = phone.matches);
+    phone.addEventListener('change', on);
+    return () => phone.removeEventListener('change', on);
+  });
 
+  // One 48px row: on a phone until the team is opened, and anywhere while the lead works alone.
+  const compact = $derived(view.ants.length === 0 || (narrow && !expanded));
   const n = $derived(counts(view.ants));
   const summary = $derived(
     view.ants.length
@@ -32,10 +41,17 @@
   }
 </script>
 
-<section class="office" class:expanded aria-label="Subagents of this session">
+<section class="office" class:expanded class:compact aria-label="Subagents of this session">
   <div class="ohead">
     <span id="summary">{summary}</span>
-    <button class="link" id="team-toggle" type="button" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
+    <button
+      class="link"
+      id="team-toggle"
+      type="button"
+      aria-expanded={expanded}
+      aria-label="{expanded ? 'Hide' : `Agents (${view.ants.length + 1})`}: {summary}"
+      onclick={() => (expanded = !expanded)}
+    >
       {expanded ? 'Hide' : `Agents (${view.ants.length + 1})`}
     </button>
   </div>
