@@ -309,8 +309,8 @@ export class SessionManager {
     try {
       await this.d.agents.load?.();
       let meta = this.meta(id);
+      const info = await this.d.transcripts.info(id);
       if (!meta) {
-        const info = await this.d.transcripts.info(id);
         if (!info?.cwd) throw new NotFoundError('Session not found');
         meta = {
           id,
@@ -323,7 +323,8 @@ export class SessionManager {
         this.saveMeta(meta);
       }
       this.settleDangling(id);
-      this.launch(meta, true);
+      // A session closed before its first message has no transcript; resuming it would fail.
+      this.launch(meta, info !== undefined);
       this.emit(id, { k: 'notice', message: 'Session resumed' });
     } finally {
       this.starting.delete(id);

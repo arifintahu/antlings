@@ -254,6 +254,7 @@ describe('resume', () => {
   it('resumes a closed session with resume=true and closes requests nobody can answer', async () => {
     kit = await makeKit();
     const { id } = await kit.mgr.create(NEW);
+    kit.transcripts.add(id, { cwd: NEW.cwd }); // the real agent writes this with its first message
     await kit.mgr.send(id, 'tool');
     await until(() => !!find(id, 'approval_request'));
     kit.mgr.close(id); // the backend goes away with a request still open
@@ -263,6 +264,15 @@ describe('resume', () => {
     expect(kit.agents.last.opts).toMatchObject({ resume: true, sessionId: id, cwd: NEW.cwd });
     const resolved = kit.mgr.eventsAfter(id, 0).filter((e) => e.event.k === 'approval_resolved');
     expect(resolved).toHaveLength(1);
+  });
+
+  it('starts, not resumes, a session that was closed before its first message (it has no transcript)', async () => {
+    kit = await makeKit();
+    const { id } = await kit.mgr.create(NEW);
+    kit.mgr.close(id);
+    await until(() => !kit.mgr.isRunning(id));
+    await kit.mgr.send(id, 'hello');
+    expect(kit.agents.last.opts).toMatchObject({ resume: false, sessionId: id });
   });
 
   it('resumes a session started outside Antlings using the transcript folder', async () => {
