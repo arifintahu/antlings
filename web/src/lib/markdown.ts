@@ -91,11 +91,16 @@ export function parseMarkdown(src: string): Block[] {
       endPara();
       const kind = ul ? 'ul' : 'ol';
       const items: Inline[][] = [];
+      const itemRe = kind === 'ul' ? /^\s*[-*+]\s+(.*)$/ : /^\s*\d+[.)]\s+(.*)$/;
       while (i < lines.length) {
-        const m = (kind === 'ul' ? /^\s*[-*+]\s+(.*)$/ : /^\s*\d+[.)]\s+(.*)$/).exec(lines[i]!);
+        const m = itemRe.exec(lines[i]!);
         if (!m) break;
         items.push(parseInline(m[1]!));
         i++;
+        // A loose list has blank lines between items. Step over them only if another item follows.
+        let j = i;
+        while (j < lines.length && lines[j]!.trim() === '') j++;
+        if (j > i && j < lines.length && itemRe.test(lines[j]!)) i = j;
       }
       i--;
       blocks.push({ t: kind, v: items });

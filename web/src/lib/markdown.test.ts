@@ -55,6 +55,14 @@ describe('parseMarkdown', () => {
     expect((b[2] as { v: unknown[] }).v).toHaveLength(2);
   });
 
+  it('keeps one list across blank lines between items, so numbers go on counting', () => {
+    const b = parseMarkdown('1. one\n\n2. two\n\n3. three\n\ntext');
+    expect(b.map((x) => x.t)).toEqual(['ol', 'p']);
+    expect(b[0]).toMatchObject({ t: 'ol', v: [expect.anything(), expect.anything(), expect.anything()] });
+    expect(parseMarkdown('- a\n\n- b').map((x) => x.t)).toEqual(['ul']);
+    expect(parseMarkdown('- a\n\ntext\n\n- b').map((x) => x.t)).toEqual(['ul', 'p', 'ul']);
+  });
+
   it('keeps an unclosed code fence as code to the end', () => {
     expect(parseMarkdown('```\nopen')).toEqual([{ t: 'code', lang: '', v: 'open' }]);
   });
