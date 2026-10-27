@@ -14,6 +14,7 @@
     onclose,
     onsecurity,
     onconnections,
+    onabout,
   }: {
     open: boolean;
     inert: boolean;
@@ -21,6 +22,7 @@
     onclose: () => void;
     onsecurity: () => void;
     onconnections: () => void;
+    onabout: () => void;
   } = $props();
 
   const archivedView = $derived(app.listView === 'archived');
@@ -143,5 +145,10 @@
       <button class="link" type="button" onclick={onsecurity}>Security</button>
       <button class="link" type="button" onclick={() => app.signOut()}>Sign out</button>
     </div>
+    {#if app.version}
+      <button class="link about-link" type="button" aria-label="About Antlings, version {app.version}" onclick={onabout}>
+        About · v{app.version}
+      </button>
+    {/if}
   </div>
 </aside>
