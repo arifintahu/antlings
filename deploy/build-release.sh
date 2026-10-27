@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the release tarball for Linux x64 inside a Node 24 container, so native modules
-# (better-sqlite3, argon2) are the Linux builds and the VPS needs no compiler and no pnpm.
+# (better-sqlite3, node-pty) are the Linux builds and the VPS needs no compiler and no pnpm.
+# node-pty has no Linux prebuilds, so this container installs python3, make and g++ and compiles it.
 #
 #   ./deploy/build-release.sh            -> dist-release/antlings-<version>.tar.gz
 #
@@ -22,6 +23,7 @@ MSYS_NO_PATHCONV=1 docker run --rm \
   node:24-slim bash -c '
     set -euo pipefail
     npm install -g pnpm@9.15.9 2>&1 | tail -2
+    apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends python3 make g++ >/dev/null
     mkdir /w && cd /src
     tar --exclude=node_modules --exclude=dist --exclude=dist-release --exclude=.git --exclude=test-results -cf - . | tar -xf - -C /w
     cd /w
@@ -29,6 +31,9 @@ MSYS_NO_PATHCONV=1 docker run --rm \
     pnpm install --frozen-lockfile --ignore-scripts 2>&1 | tail -3
     pnpm build
     pnpm --filter @antlings/server --prod deploy /pack/app >/dev/null
+    # The install above skipped build scripts and `pnpm deploy` does not carry build output, so compile node-pty here.
+    (cd /pack/app && pnpm rebuild node-pty 2>&1 | tail -3)
+    test -f "$(find /pack/app/node_modules/.pnpm -path "*node-pty*/build/Release/pty.node" | head -1)" || { echo "node-pty was not built" >&2; exit 1; }
     mkdir -p /pack/rel/app /pack/rel/web /pack/rel/deploy
     cp -a /pack/app/. /pack/rel/app/
     # The VPS has its own claude binary (ANTLINGS_CLAUDE_PATH). The ~250 MB copies bundled with the SDK are not needed.
