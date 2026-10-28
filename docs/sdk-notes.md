@@ -69,3 +69,13 @@ Checked before the Connections page was built. Linux (`script -qefc` fallback) s
 | `claude auth status --json`, signed out | Keys: `loggedIn` (false), `authMethod` (`none`), `apiProvider`. Signed-in keys were not recorded; the adapter reads `loggedIn`, `authMethod` and `subscriptionType` only and never the email. |
 | `gh auth login --web --git-protocol https --skip-ssh-key` over pipes | Works. Prints `! First copy your one-time code: XXXX-XXXX` and `Open this URL to continue in your web browser: https://github.com/login/device`, then polls. |
 | `gh auth status` | Prints `Logged in to github.com account <login> (keyring)` when signed in. The adapter reads the login from that line only. |
+
+## Attachments (2026-10-28, SDK 0.3.296)
+
+Written from the design, not from a live run. The live test in `server/src/live.test.ts` ("reads an attached text file without asking") checks the rows marked unverified; run it with `ANTLINGS_LIVE=1` and replace the status.
+
+| Item | Note |
+|---|---|
+| Image input | The streaming user message `content` is an array of blocks: `{ type: 'image', source: { type: 'base64', media_type, data } }` first, then text blocks. Antlings sends an image inline only if it is within 5 MB and the images of one message total at most 20 MB. Anything else is listed by path. Unverified: the API's real limit per image and per request. |
+| Other files | Listed by absolute path in a second text block. Claude opens them with Read. |
+| `additionalDirectories` | Antlings passes the session's upload folder (`<dataDir>/uploads/<sessionId>`) so Read needs no approval there. Unverified in every permission mode and after `resume`. |

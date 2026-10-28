@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+- Paste images and attach files in the session input. Each file is at most 5 MB, with up to 5 per message and 200 MB per session. Images go to Claude as images; other files are saved on the server and Claude reads them by path. Unsent files are deleted after an hour.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added
