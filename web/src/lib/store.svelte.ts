@@ -90,6 +90,8 @@ class AppStore {
     onMessage: (m) => this.onMessage(m),
     onStatus: (s) => {
       this.wsStatus = s;
+      // A load that failed while the server stalled would otherwise stay empty until the next turn ends.
+      if (s === 'open') void this.refreshSessions();
     },
     subscriptions: () => Object.values(this.views).map((v) => ({ sessionId: v.id, lastSeq: v.lastSeq })),
     onSignedOut: () => this.signedOut(),
