@@ -7,6 +7,7 @@ import {
   TEXT_EXTENSIONS,
   type AttachmentKind,
 } from '@antlings/shared';
+import { ApiError } from './api.js';
 
 /** One chip in the composer. */
 export interface TrayItem {
@@ -57,3 +58,13 @@ export const ACCEPT = [
   'text/*',
   ...['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', ...TEXT_EXTENSIONS].map((e) => `.${e}`),
 ].join(',');
+
+const FAILED = 'The upload failed. Remove the file and try again.';
+
+/** What to tell the reader when an upload fails: the server's own message, or a plain sentence, never a bare code. */
+export function uploadErrorText(e: unknown): string {
+  if (!(e instanceof ApiError)) return FAILED;
+  if (typeof e.data.message === 'string') return e.data.message;
+  if (e.code === 'offline') return `${e.message}. Remove the file and try again.`;
+  return FAILED;
+}

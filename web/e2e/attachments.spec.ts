@@ -196,6 +196,24 @@ test.describe('on a phone', () => {
     await chooser.setFiles(png());
     await expect(chip(page, 'shot.png')).toContainText('Ready');
   });
+
+  const LONG = 'Screenshot_2026-10-28-18-29-12-123456789_with_a_long_name';
+
+  test('an uploading chip and a refused chip stay inside the screen, remove button included', async ({
+    page,
+  }) => {
+    await page.route('**/api/sessions/*/uploads', () => undefined); // never answers: the upload stays "Uploading"
+    await attach(page, [{ ...png(`${LONG}.png`) }, text(`${LONG}.exe`, 'MZ')]);
+    await expect(chip(page, `${LONG}.png`)).toContainText('Uploading');
+    await expect(chip(page, `${LONG}.exe`)).toContainText('Not attached');
+    for (const name of [`${LONG}.png`, `${LONG}.exe`]) {
+      const c = chip(page, name);
+      const box = (await c.boundingBox())!;
+      const rm = (await page.getByRole('button', { name: `Remove ${name}` }).boundingBox())!;
+      expect(box.x + box.width, `${name} chip right edge`).toBeLessThanOrEqual(375);
+      expect(rm.x + rm.width, `${name} remove button right edge`).toBeLessThanOrEqual(375);
+    }
+  });
 });
 
 test('a file picked while the connection is down is still attached', async ({ page, context }) => {

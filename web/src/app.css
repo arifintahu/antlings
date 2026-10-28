@@ -1985,6 +1985,7 @@ a.btn {
 /* attachments */
 .tray {
   flex: 0 0 100%;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -1993,6 +1994,7 @@ a.btn {
   list-style: none;
 }
 .file-chip {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 8px;
