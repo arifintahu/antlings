@@ -197,3 +197,15 @@ test.describe('on a phone', () => {
     await expect(chip(page, 'shot.png')).toContainText('Ready');
   });
 });
+
+test('a file picked while the connection is down is still attached', async ({ page, context }) => {
+  // On a phone the page is suspended while the system picker is open and the socket drops.
+  await context.setOffline(true);
+  await page.request.post('http://localhost:3199/__e2e/drop-sockets', {
+    headers: { origin: 'http://localhost:3199' },
+  });
+  await expect(page.getByText('Offline. Reconnecting…')).toBeVisible({ timeout: 10_000 });
+  await attach(page, png());
+  await expect(chip(page, 'shot.png')).toBeVisible();
+  await context.setOffline(false);
+});

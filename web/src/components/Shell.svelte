@@ -104,6 +104,8 @@
   const ctxPct = $derived(Math.round(view?.context?.percentage ?? 0));
   const busyAnt = $derived(!!ant && (isBusy(ant.state) || ant.state === 'approval'));
   const composerOff = $derived(!view || archived || busyAnt || app.wsStatus !== 'open');
+  // Files upload over HTTP, so a dropped socket must not refuse them: a phone suspends the page while its picker is open.
+  const attachOff = $derived(!view || archived || busyAnt);
 
   const placeholder = $derived(
     archived
@@ -151,13 +153,13 @@
   });
 
   function addFiles(files: File[]) {
-    if (!files.length || composerOff || !app.activeId) return;
+    if (!files.length || attachOff || !app.activeId) return;
     tray.add(files, app.activeId, (name) => app.say(`Attached ${name}`));
   }
 
   function paste(ev: ClipboardEvent) {
     const files = [...(ev.clipboardData?.files ?? [])];
-    if (!files.length || composerOff) return;
+    if (!files.length || attachOff) return;
     // Text that was copied with the image still pastes as text.
     if (!ev.clipboardData?.getData('text/plain')) ev.preventDefault();
     addFiles(files.map((f) => (f.type.startsWith('image/') ? new File([f], pastedName(f, new Date()), { type: f.type }) : f)));
@@ -165,13 +167,13 @@
 
   const hasFiles = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('Files');
   function dragEnter(ev: DragEvent) {
-    if (!hasFiles(ev) || composerOff) return;
+    if (!hasFiles(ev) || attachOff) return;
     ev.preventDefault();
     dragDepth += 1;
     dropping = true;
   }
   function dragOver(ev: DragEvent) {
-    if (hasFiles(ev) && !composerOff) ev.preventDefault();
+    if (hasFiles(ev) && !attachOff) ev.preventDefault();
   }
   function dragLeave() {
     dragDepth = Math.max(0, dragDepth - 1);
@@ -424,7 +426,7 @@
         {#if tray.items.length}<AttachmentChips items={tray.items} onremove={(k) => tray.remove(k)} />{/if}
         {#if tray.error}<p class="attach-err" role="alert">{tray.error}</p>{/if}
         <input bind:this={fileInput} type="file" multiple hidden accept={ACCEPT} onchange={(e) => { addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
-        <button class="btn" type="button" aria-label="Attach file" disabled={composerOff} onclick={() => fileInput?.click()}>
+        <button class="btn" type="button" aria-label="Attach file" disabled={attachOff} onclick={() => fileInput?.click()}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11l-8 8a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8-8" /></svg>
         </button>
         <label class="sr" for="prompt">Message</label>
