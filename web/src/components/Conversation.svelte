@@ -36,7 +36,7 @@
       {#if it.attachments?.length}
         <ul class="tray sent" aria-label="Attached files">
           {#each it.attachments as a (a.id)}
-            <li class="chip">
+            <li class="file-chip">
               {#if a.kind === 'image'}
                 <img class="thumb" src={`/api/sessions/${view.id}/uploads/${a.id}`} alt="" width="32" height="32" />
               {:else}

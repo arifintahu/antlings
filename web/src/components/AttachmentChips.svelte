@@ -10,7 +10,7 @@
 
 <ul class="tray" aria-label="Attached files">
   {#each items as i (i.key)}
-    <li class="chip" class:err={i.state === 'error'}>
+    <li class="file-chip" class:err={i.state === 'error'}>
       {#if i.state === 'error'}
         <svg class="ficon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 17v.5M3 20L12 4l9 16z" /></svg>
       {:else if i.preview}

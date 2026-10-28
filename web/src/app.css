@@ -1992,10 +1992,12 @@ a.btn {
   padding: 0;
   list-style: none;
 }
-.chip {
+.file-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-size: 18px;
+  line-height: 1;
   min-height: 44px;
   max-width: 100%;
   padding: 0 4px 0 8px;
@@ -2005,18 +2007,18 @@ a.btn {
 .tray.sent {
   margin-top: 6px;
 }
-.tray.sent .chip {
+.tray.sent .file-chip {
   min-height: 40px;
   padding-right: 8px;
 }
-.chip .thumb {
+.file-chip .thumb {
   width: 32px;
   height: 32px;
   flex: none;
   object-fit: cover;
   background: var(--line);
 }
-.chip .ficon {
+.file-chip .ficon {
   width: 24px;
   height: 24px;
   flex: none;
@@ -2025,25 +2027,25 @@ a.btn {
   stroke-width: 2.5;
   stroke-linecap: square;
 }
-.chip .nm {
+.file-chip .nm {
   min-width: 0;
   max-width: min(40vw, 22ch);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chip .sz,
-.chip .st {
+.file-chip .sz,
+.file-chip .st {
   flex: none;
   color: var(--muted);
   font-size: 17px;
   white-space: nowrap;
 }
-.chip.err {
+.file-chip.err {
   border-color: var(--red);
 }
-.chip.err .ficon,
-.chip.err .st {
+.file-chip.err .ficon,
+.file-chip.err .st {
   color: var(--red);
 }
 .attach-err {

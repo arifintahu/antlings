@@ -27,7 +27,7 @@ test.afterEach(async ({ page }) => {
 
 const attach = (page: Page, files: Parameters<ReturnType<Page['locator']>['setInputFiles']>[0]) =>
   page.locator('input[type=file]').setInputFiles(files);
-const chip = (page: Page, name: string) => page.locator('.tray .chip', { hasText: name });
+const chip = (page: Page, name: string) => page.locator('.tray .file-chip', { hasText: name });
 
 /** Dispatches a paste carrying a PNG file, and optionally text. Returns whether the page cancelled the event. */
 const pasteImage = (page: Page, withText: boolean) =>
@@ -49,8 +49,8 @@ test('the picker adds an image, and sending shows it in the conversation', async
   await expect(chip(page, 'shot.png')).toContainText('Ready');
   await say(page, 'describe this');
   await expect(page.getByText('I got 1 image(s) and 0 file(s)')).toBeVisible();
-  await expect(page.locator('.msg.user .chip', { hasText: 'shot.png' })).toBeVisible();
-  await expect(page.locator('.composer .chip')).toHaveCount(0);
+  await expect(page.locator('.msg.user .file-chip', { hasText: 'shot.png' })).toBeVisible();
+  await expect(page.locator('.composer .file-chip')).toHaveCount(0);
 });
 
 test('a text file is sent as a path line', async ({ page }) => {
@@ -62,13 +62,13 @@ test('a text file is sent as a path line', async ({ page }) => {
 
 test('pasting an image adds a named chip', async ({ page }) => {
   expect(await pasteImage(page, false)).toBe(true);
-  await expect(page.locator('.tray .chip .nm').first()).toHaveText(/^pasted-image-\d\d-\d\d-\d\d\.png$/);
-  await expect(page.locator('.tray .chip').first()).toContainText('Ready');
+  await expect(page.locator('.tray .file-chip .nm').first()).toHaveText(/^pasted-image-\d\d-\d\d-\d\d\.png$/);
+  await expect(page.locator('.tray .file-chip').first()).toContainText('Ready');
 });
 
 test('pasting text together with an image keeps the text paste', async ({ page }) => {
   expect(await pasteImage(page, true)).toBe(false); // the page did not cancel, so the text still pastes
-  await expect(page.locator('.tray .chip')).toHaveCount(1);
+  await expect(page.locator('.tray .file-chip')).toHaveCount(1);
 });
 
 test('send works with only a file', async ({ page }) => {
@@ -110,14 +110,14 @@ test('a sixth file is refused', async ({ page }) => {
   );
   await expect(chip(page, 'f6.txt')).toContainText('Not attached');
   await expect(page.getByRole('alert')).toHaveText('Only 5 files per message.');
-  await expect(page.locator('.tray .chip', { hasText: 'Ready' })).toHaveCount(5);
+  await expect(page.locator('.tray .file-chip', { hasText: 'Ready' })).toHaveCount(5);
 });
 
 test('removing a chip clears it and disables Send again', async ({ page }) => {
   await attach(page, png());
   await expect(chip(page, 'shot.png')).toContainText('Ready');
   await page.getByRole('button', { name: 'Remove shot.png' }).click();
-  await expect(page.locator('.tray .chip')).toHaveCount(0);
+  await expect(page.locator('.tray .file-chip')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
 });
 
@@ -162,7 +162,7 @@ test('chips and errors pass the contrast check in light and dark, and do not ani
     await expectAccessible(page, `attachments in ${scheme}`);
   }
   const moving = await page
-    .locator('.tray .chip')
+    .locator('.tray .file-chip')
     .evaluateAll((els) =>
       els.filter(
         (e) =>
@@ -170,4 +170,14 @@ test('chips and errors pass the contrast check in light and dark, and do not ani
       ),
     );
   expect(moving).toHaveLength(0);
+});
+
+test('file chips have no state marker square', async ({ page }) => {
+  await attach(page, png());
+  await expect(chip(page, 'shot.png')).toContainText('Ready');
+  const marker = await page
+    .locator('.tray [class*="chip"]')
+    .first()
+    .evaluate((el) => getComputedStyle(el, '::before').content);
+  expect(marker).toBe('none');
 });
