@@ -9,6 +9,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Fixed
 
 - On a phone, the attach button opened only the file browser, so photos could not be picked. The file picker now names image, PDF and text types before the file extensions, so iOS and Android offer the photo library and camera. HEIC is left out on purpose, so iOS converts photos to JPEG.
+- On Android, a file chosen in the system picker was dropped without a message when the page had been suspended meanwhile and the connection had closed. Attaching no longer depends on the connection; only sending does.
 
 ## [0.5.0] - 2026-10-28
 
