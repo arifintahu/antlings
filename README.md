@@ -25,6 +25,7 @@ An ant's desk shows its state: **idle**, **thinking**, **running a tool**, **nee
 - **Sessions:** start, resume, rename, pin, archive and delete. Pick the folder, model, effort and permission mode for each one.
 - **Approvals you can read:** a waiting tool call shows the command, the file content or a diff before you press Approve or Deny.
 - **Subagents:** one ant per subagent with its state, current tool, tokens, log and final report. Stop one, or send a follow-up through the lead.
+- **Attachments:** paste an image or attach files (images, PDF, text and code; 5 MB each, 5 per message). Claude sees images directly and reads other files from disk. Files are stored outside your project folder and removed with the session.
 - **Terminal:** a real shell next to the chat, opened in the session's folder. Run a dev server or the tests while the agent works. Shells keep running when you close the browser, and a reload shows the last 5,000 lines. Below 900 px it is a Chat | Terminal switch with a key bar. It is a shell as the service user, so read the security notes below.
 - **Meters:** context window use and cost per session, and plan usage limits when your login supports them.
 - **Phone friendly:** installable as a PWA, usable one-handed, with push notifications when an approval is waiting.

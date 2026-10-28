@@ -7,6 +7,7 @@ import type { Effort } from './agent.js';
 import type { Auth, SessionRow } from './auth/service.js';
 import { LimitError, NotFoundError, type SessionManager } from './sessions.js';
 import type { Transcripts } from './transcripts.js';
+import { AttachmentNotFoundError } from './uploads.js';
 
 export const WS_MAX_PAYLOAD = 256 * 1024;
 const RECHECK_MS = 15_000;
@@ -86,7 +87,9 @@ export function attachWebSocket(
         try {
           await handle(msg, row);
         } catch (e) {
-          if (e instanceof LimitError) send({ t: 'error', code: 'session_limit', message: e.message });
+          if (e instanceof AttachmentNotFoundError)
+            send({ t: 'error', code: 'attachment_expired', message: e.message });
+          else if (e instanceof LimitError) send({ t: 'error', code: 'session_limit', message: e.message });
           else if (e instanceof NotFoundError) send({ t: 'error', code: 'not_found', message: e.message });
           else {
             auth.log(`antlings-error ws ${(e instanceof Error ? e.message : 'unknown').slice(0, 200)}`);
@@ -106,7 +109,7 @@ export function attachWebSocket(
           return;
         }
         case 'send':
-          return mgr.send(msg.sessionId, msg.text);
+          return mgr.send(msg.sessionId, msg.text, msg.attachmentIds);
         case 'approve':
           if (!mgr.approve(msg.sessionId, msg.requestId, msg.updatedInput))
             send({ t: 'error', code: 'stale_request', message: 'That request is no longer waiting' });

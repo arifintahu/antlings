@@ -1,4 +1,4 @@
-import type { UiEvent } from '@antlings/shared';
+import type { AttachmentRef, UiEvent } from '@antlings/shared';
 import type { AntState } from '../ants/draw.js';
 
 export interface LogEntry {
@@ -35,7 +35,7 @@ export interface AntView {
 }
 
 export type Item =
-  | { kind: 'user'; seq: number; text: string }
+  | { kind: 'user'; seq: number; text: string; attachments?: AttachmentRef[] }
   | { kind: 'agent'; seq: number; text: string }
   | {
       kind: 'tool';
@@ -123,7 +123,12 @@ export function applyEvent(v: SessionView, seq: number, at: number, ev: UiEvent)
   switch (ev.k) {
     case 'user':
       v.streaming = '';
-      v.items.push({ kind: 'user', seq, text: ev.text });
+      v.items.push({
+        kind: 'user',
+        seq,
+        text: ev.text,
+        ...(ev.attachments?.length ? { attachments: ev.attachments } : {}),
+      });
       v.turnRunning = true;
       break;
     case 'assistant_text': {

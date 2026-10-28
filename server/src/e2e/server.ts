@@ -13,6 +13,7 @@ import { FakeAgents, FakeTranscripts } from '../fakeAgent.js';
 import { Folders } from '../folders.js';
 import { SessionManager } from '../sessions.js';
 import { systemClock } from '../util.js';
+import { Uploads } from '../uploads.js';
 import { fileURLToPath } from 'node:url';
 import { Connections } from '../connections/service.js';
 import { ConnectionSettings } from '../connections/store.js';
@@ -48,12 +49,14 @@ class Agents extends FakeAgents {
 }
 const agents = new Agents();
 const folders = new Folders(home);
+const uploads = new Uploads(db, join(config.dataDir, 'uploads'), systemClock);
 const mgr = new SessionManager({
   db,
   clock: systemClock,
   config,
   agents,
   transcripts,
+  uploads,
   audit: (k, d) => auth.audit(k, undefined, d),
 });
 
@@ -86,7 +89,7 @@ let sockets: ReturnType<typeof wireApp> | undefined;
 const app = await buildApp({
   auth,
   extend: (a) => {
-    sockets = wireApp(a, { auth, mgr, folders, transcripts, connections, terms });
+    sockets = wireApp(a, { auth, mgr, folders, transcripts, connections, terms, uploads });
     const pub = { config: { public: true } };
     // Returns a fresh setup code. Resets access first when something is already set up.
     a.post('/__e2e/reset', pub, async () => {

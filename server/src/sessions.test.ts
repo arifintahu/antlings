@@ -329,6 +329,7 @@ describe('replay after reconnect', () => {
       config: kit.auth.config,
       agents: kit.agents,
       transcripts: kit.transcripts,
+      uploads: kit.uploads,
       audit: () => undefined,
     });
     expect(second.emit(id, { k: 'notice', message: 'x' }).seq).toBe(last + 1);

@@ -71,6 +71,9 @@ class AppStore {
   models = $state<ModelDto[]>([]);
   wsStatus = $state<SocketStatus>('down');
   banner = $state('');
+  /** The text of the last send, and where it goes back to when the server refuses an attachment. */
+  lastDraft = '';
+  restoreText = $state('');
   live = $state('');
   stepUpAsk = $state<{ id: number; reason: string; resolve: (ok: boolean) => void } | null>(null);
   private askId = 0;
@@ -261,7 +264,10 @@ class AppStore {
         void this.askStepUp('Switching to Bypass mode.').then((ok) => {
           if (ok && id) this.tell({ t: 'setPermissionMode', sessionId: id, mode: 'bypassPermissions' });
         });
-      } else this.banner = m.message;
+      } else {
+        this.banner = m.message;
+        if (m.code === 'attachment_expired') this.restoreText = this.lastDraft;
+      }
       return;
     }
     if (m.t === 'delta') {
@@ -359,9 +365,11 @@ class AppStore {
     if (!ok) this.banner = 'Not connected. Your action was not sent. Try again in a moment.';
     return ok;
   }
-  send(text: string): boolean {
+  send(text: string, attachmentIds: string[] = []): boolean {
     const id = this.activeId;
-    return !!id && !!text.trim() && this.tell({ t: 'send', sessionId: id, text });
+    if (!id || (!text.trim() && attachmentIds.length === 0)) return false;
+    this.lastDraft = text;
+    return this.tell({ t: 'send', sessionId: id, text, ...(attachmentIds.length ? { attachmentIds } : {}) });
   }
   approve(requestId: string): void {
     if (this.activeId) this.tell({ t: 'approve', sessionId: this.activeId, requestId });

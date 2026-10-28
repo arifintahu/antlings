@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatBytes } from '@antlings/shared';
   import { argOf, type SessionView } from '../lib/model.js';
   import { app, nameOf } from '../lib/store.svelte.js';
   import Chip from './Chip.svelte';
@@ -30,7 +31,24 @@
 
 {#each view.items as it (it.seq)}
   {#if it.kind === 'user'}
-    <div class="msg user"><span class="who">You</span>{it.text}</div>
+    <div class="msg user">
+      <span class="who">You</span>{it.text}
+      {#if it.attachments?.length}
+        <ul class="tray sent" aria-label="Attached files">
+          {#each it.attachments as a (a.id)}
+            <li class="file-chip">
+              {#if a.kind === 'image'}
+                <img class="thumb" src={`/api/sessions/${view.id}/uploads/${a.id}`} alt="" width="32" height="32" />
+              {:else}
+                <svg class="ficon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v4h4" /></svg>
+              {/if}
+              <span class="nm">{a.name}</span>
+              <span class="sz">{formatBytes(a.size)}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
   {:else if it.kind === 'agent'}
     <div class="msg agent"><span class="who">{nameOf(view.id)}</span><Markdown text={it.text} /></div>
   {:else if it.kind === 'tool'}

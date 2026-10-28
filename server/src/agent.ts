@@ -8,6 +8,7 @@ import type {
 import type { PermissionMode } from '@antlings/shared';
 import type { Config } from './config.js';
 import type { ClaudeMode } from './connections/store.js';
+import type { ContentBlock } from './promptContent.js';
 
 export type { ModelInfo, SDKMessage };
 
@@ -22,6 +23,8 @@ export interface StartOptions {
   effort?: Effort;
   mode: PermissionMode;
   canUseTool: CanUseTool;
+  /** Extra folders the agent may read without asking (the session's uploads). */
+  additionalDirs: string[];
   /** Hard spend cap for the process. Set by live tests. */
   maxBudgetUsd?: number;
 }
@@ -44,7 +47,7 @@ export interface RawPlanUsage {
 /** One running Claude Code session. The real implementation wraps the SDK; tests use a fake. */
 export interface AgentHandle {
   messages: AsyncIterable<SDKMessage>;
-  send(text: string): void;
+  send(content: string | ContentBlock[]): void;
   interrupt(): Promise<void>;
   stopTask(taskId: string): Promise<void>;
   setModel(model: string): Promise<void>;
@@ -151,16 +154,17 @@ export function sdkAgentFactory(config: Config, authSource?: () => ClaudeAuthSou
           ...(o.mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
           ...(o.resume ? { resume: o.sessionId } : { sessionId: o.sessionId }),
           canUseTool: o.canUseTool,
+          additionalDirectories: o.additionalDirs,
           ...(o.maxBudgetUsd ? { maxBudgetUsd: o.maxBudgetUsd } : {}),
           abortController: abort,
         },
       });
       return {
         messages: q,
-        send(text) {
+        send(content) {
           inbox.push({
             type: 'user',
-            message: { role: 'user', content: text },
+            message: { role: 'user', content: content as SDKUserMessage['message']['content'] },
             parent_tool_use_id: null,
           });
         },

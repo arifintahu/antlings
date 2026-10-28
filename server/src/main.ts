@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { buildApp } from './app.js';
 import { sdkAgentFactory } from './agent.js';
 import { Auth } from './auth/service.js';
@@ -13,9 +14,13 @@ import { PushService } from './push.js';
 import { repairStoredHistory, SessionManager } from './sessions.js';
 import { sdkTranscripts } from './transcripts.js';
 import { systemClock } from './util.js';
+import { Uploads } from './uploads.js';
 import { nodePtyFactory } from './terminals/pty.js';
 import { Terminals } from './terminals/registry.js';
 import { wireApp } from './wiring.js';
+
+/** Files attached but never sent are deleted after an hour. */
+const UNSENT_UPLOAD_MS = 60 * 60_000;
 
 async function main(): Promise<void> {
   loadEnvFileIfNeeded();
@@ -28,12 +33,14 @@ async function main(): Promise<void> {
   if (repaired > 0) console.error(`repaired ${repaired} stored history events`);
   const push = new PushService(db, systemClock, config.vapid);
   auth.onSignin = () => push.signedIn();
+  const uploads = new Uploads(db, join(config.dataDir, 'uploads'), systemClock);
   const mgr = new SessionManager({
     db,
     clock: systemClock,
     config,
     agents: sdkAgentFactory(config, () => ({ mode: settings.mode(), apiKey: settings.apiKey() })),
     transcripts: sdkTranscripts,
+    uploads,
     audit: (kind, detail) => auth.audit(kind, undefined, detail),
     notifier: push,
   });
@@ -53,10 +60,17 @@ async function main(): Promise<void> {
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, connections, terms, push });
+      wireApp(a, { auth, mgr, folders, transcripts: sdkTranscripts, connections, terms, push, uploads });
     },
   });
-  const reaper = setInterval(() => mgr.reapIdle(), 60_000);
+  const reaper = setInterval(() => {
+    mgr.reapIdle();
+    try {
+      uploads.purgeUnsent(UNSENT_UPLOAD_MS);
+    } catch (e) {
+      auth.log(`antlings-error uploads purge ${(e instanceof Error ? e.message : 'unknown').slice(0, 200)}`);
+    }
+  }, 60_000);
   reaper.unref();
   await app.listen({ host: config.host, port: config.port });
   console.error(`antlings listening on ${config.host}:${config.port} (origin ${config.origin})`);

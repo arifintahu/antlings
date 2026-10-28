@@ -50,6 +50,56 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   return data as T;
 }
 
+/**
+ * Sends one file as the raw request body. XMLHttpRequest, not fetch, because only it reports upload progress.
+ * Rejects with an ApiError, or with a DOMException named AbortError when `signal` aborts.
+ */
+export function upload<T>(
+  url: string,
+  file: Blob,
+  name: string,
+  onProgress: (fraction: number) => void,
+  signal: AbortSignal,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => new DOMException('Upload cancelled', 'AbortError');
+    if (signal.aborted) return reject(aborted());
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.setRequestHeader('x-filename', encodeURIComponent(name));
+    if (csrf) xhr.setRequestHeader('x-csrf-token', csrf);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onerror = () => reject(new ApiError(0, 'offline', 'No connection to the server'));
+    xhr.onload = () => {
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(xhr.responseText) as Record<string, unknown>;
+      } catch {
+        /* empty body */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data as T);
+      const code = typeof data.error === 'string' ? data.error : 'failed';
+      if (xhr.status === 401 && code === 'unauthorized') onUnauthorized();
+      reject(
+        new ApiError(xhr.status, code, typeof data.message === 'string' ? data.message : undefined, data),
+      );
+    };
+    signal.addEventListener(
+      'abort',
+      () => {
+        xhr.abort();
+        reject(aborted());
+      },
+      { once: true },
+    );
+    xhr.send(file);
+  });
+}
+
 export const get = <T>(url: string): Promise<T> => request<T>('GET', url);
 export const post = <T>(url: string, body: unknown = {}): Promise<T> => request<T>('POST', url, body);
 export const patch = <T>(url: string, body: unknown): Promise<T> => request<T>('PATCH', url, body);

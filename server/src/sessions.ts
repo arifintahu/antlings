@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import type { PermissionMode, PlanUsage, ServerMessage, StoredEvent, UiEvent } from '@antlings/shared';
 import type { AgentFactory, AgentHandle, Effort, ModelInfo } from './agent.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import { cleanUserText, EventMapper, historyEvents } from './events.js';
+import { buildContent } from './promptContent.js';
+import type { Uploads } from './uploads.js';
 import { fetchPlanUsage } from './plan.js';
 import type { Transcripts } from './transcripts.js';
 import { randomToken, type Clock } from './util.js';
@@ -63,6 +66,7 @@ export interface ManagerDeps {
   config: Config;
   agents: AgentFactory;
   transcripts: Transcripts;
+  uploads: Uploads;
   audit: (kind: string, detail?: unknown) => void;
   notifier?: Notifier;
   maxBudgetUsd?: number;
@@ -351,6 +355,7 @@ export class SessionManager {
       effort: meta.effort ?? undefined,
       mode: meta.mode,
       canUseTool: this.canUseTool(a),
+      additionalDirs: [this.d.uploads.dirFor(id)],
       maxBudgetUsd: this.d.maxBudgetUsd,
     });
     this.active.set(id, a);
@@ -473,14 +478,19 @@ export class SessionManager {
     return a;
   }
 
-  async send(id: string, text: string): Promise<void> {
+  async send(id: string, text: string, attachmentIds: string[] = []): Promise<void> {
+    const files = this.d.uploads.resolve(id, attachmentIds); // before the agent starts: a bad id changes nothing
     await this.ensureRunning(id);
     const a = this.live(id);
+    // Read the files before anything is logged: a file that vanished must not leave a half-sent turn.
+    const content = buildContent(text, files, (f) => readFileSync(f.path));
     a.turnRunning = true;
     a.lastActivity = this.d.clock.now();
-    this.emit(id, { k: 'user', text });
+    const attachments = files.map(({ id: fid, name, size, kind }) => ({ id: fid, name, size, kind }));
+    this.d.uploads.markSent(id, attachmentIds);
+    this.emit(id, { k: 'user', text, ...(attachments.length ? { attachments } : {}) });
     this.emit(id, { k: 'state', state: 'thinking' });
-    a.handle.send(text);
+    a.handle.send(content);
   }
 
   approve(id: string, requestId: string, updatedInput?: Record<string, unknown>): boolean {
@@ -571,6 +581,7 @@ export class SessionManager {
     this.d.db.prepare('DELETE FROM event_log WHERE session_id = ?').run(id);
     this.d.db.prepare('DELETE FROM session_meta WHERE id = ?').run(id);
     this.d.db.prepare('DELETE FROM session_pins WHERE id = ?').run(id);
+    this.d.uploads.removeSession(id);
     this.seqCache.delete(id);
     this.d.audit('session_deleted', { id });
   }

@@ -10,6 +10,7 @@ import type {
   SDKMessage,
   StartOptions,
 } from './agent.js';
+import type { ContentBlock } from './promptContent.js';
 import type { Transcripts, TranscriptInfo, TranscriptMessage } from './transcripts.js';
 
 /**
@@ -45,6 +46,9 @@ export class FakeHandle implements AgentHandle {
   private wake: (() => void) | undefined;
   private stopWaiters = new Map<string | undefined, (r: 'interrupt' | 'stop') => void>();
   turns = 0;
+  /** Image blocks and path lines in the last user turn, for scenarios that report them. */
+  lastImages = 0;
+  lastPaths = 0;
 
   constructor(
     readonly opts: StartOptions,
@@ -86,8 +90,14 @@ export class FakeHandle implements AgentHandle {
       }),
   };
 
-  send(text: string): void {
+  send(content: string | ContentBlock[]): void {
+    const texts =
+      typeof content === 'string' ? [] : content.flatMap((b) => (b.type === 'text' ? [b.text] : []));
+    const text = typeof content === 'string' ? content : (texts[0] ?? '');
+    this.lastImages = typeof content === 'string' ? 0 : content.filter((b) => b.type === 'image').length;
+    this.lastPaths = (texts[1] ?? '').split(/\r?\n/).filter((l) => l.startsWith('- ')).length;
     this.calls.push(`send:${text}`);
+    if (typeof content !== 'string') this.calls.push(`images:${this.lastImages}`);
     this.turns += 1;
     void (async () => {
       this.api.emit({
@@ -157,7 +167,7 @@ export const MODELS: ModelInfo[] = [
 ];
 
 /** Default scenarios keyed by the text the test sends. */
-export const defaultScenario: Scenario = async (text, api) => {
+export const defaultScenario: Scenario = async (text, api, h) => {
   const result = () =>
     api.emit({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.01, result: 'ok' });
   const say = (t: string, parent: string | null = null) =>
@@ -167,6 +177,10 @@ export const defaultScenario: Scenario = async (text, api) => {
       message: { content: [{ type: 'text', text: t }] },
     });
 
+  if (text.startsWith('describe')) {
+    say(`I got ${h.lastImages} image(s) and ${h.lastPaths} file(s)`);
+    return result();
+  }
   if (text === 'hello') {
     say('Hi there');
     return result();
