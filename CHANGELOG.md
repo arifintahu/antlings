@@ -4,6 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-28
+
+### Fixed
+
+- On a phone, the attach button opened only the file browser, so photos could not be picked. The file picker now names image, PDF and text types before the file extensions, so iOS and Android offer the photo library and camera. HEIC is left out on purpose, so iOS converts photos to JPEG.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added
@@ -91,7 +97,8 @@ First public release.
 - Plan usage is shown only with a subscription login, and only after the first message.
 - Web Push has not been tested on iOS home-screen installs.
 
-[Unreleased]: https://github.com/arifintahu/antlings/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/arifintahu/antlings/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/arifintahu/antlings/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/arifintahu/antlings/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arifintahu/antlings/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arifintahu/antlings/compare/v0.2.0...v0.3.0
