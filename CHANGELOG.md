@@ -4,7 +4,24 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-- Paste images and attach files in the session input. Each file is at most 5 MB, with up to 5 per message and 200 MB per session. Images go to Claude as images; other files are saved on the server and Claude reads them by path. Unsent files are deleted after an hour.
+## [0.5.0] - 2026-10-28
+
+### Added
+
+- Paste images and attach files in the session input: a paperclip button, Ctrl+V for images, and drag and drop. Files show as chips above the input with progress, size and errors. Each file is at most 5 MB, with up to 5 per message and 200 MB per session. Allowed types are PNG, JPEG, GIF, WebP, PDF, and text or code files; the content is checked, not just the extension, and SVG is refused.
+- Images go to Claude as images (up to 5 MB each and 20 MB per message). Other files are saved on the server and Claude reads them by path. Files live in `<dataDir>/uploads/<sessionId>/`, outside the project folder, and are deleted with the session. Files that are never sent are deleted after 1 hour. The event log keeps file names and sizes, not the bytes.
+- New routes `POST`, `GET` and `DELETE` on `/api/sessions/:id/uploads`, and an `uploads` table in the database.
+
+### Fixed
+
+- The session list reloads when the WebSocket reconnects, so a list that failed to load while the server stalled no longer stays empty.
+
+### Known limits
+
+- Whether Claude reads the uploads folder without a permission prompt, and the API's image size limits, were seen working on one deployment but not checked by the opt-in live test (the login had expired).
+- A file name over 120 characters loses its extension and is reported as an unsupported type.
+- Parallel uploads close to the 200 MB session limit can go over it by up to 25 MB.
+- A session history rebuilt from Claude's own transcript shows the path list and no attachment chips.
 
 ## [0.4.0] - 2026-10-27
 
@@ -74,6 +91,9 @@ First public release.
 - Plan usage is shown only with a subscription login, and only after the first message.
 - Web Push has not been tested on iOS home-screen installs.
 
-[Unreleased]: https://github.com/arifintahu/antlings/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/arifintahu/antlings/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/arifintahu/antlings/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/arifintahu/antlings/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/arifintahu/antlings/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arifintahu/antlings/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arifintahu/antlings/releases/tag/v0.1.0
