@@ -13,6 +13,15 @@ const feed = (v: SessionView, ...events: UiEvent[]) => {
 };
 
 describe('applyEvent', () => {
+  it('keeps the attachments of a user message', () => {
+    const v = newView('s');
+    const att = { id: 'u1', name: 'a.png', size: 10, kind: 'image' as const };
+    applyEvent(v, 1, 0, { k: 'user', text: 'look', attachments: [att] });
+    applyEvent(v, 2, 0, { k: 'user', text: 'plain' });
+    expect(v.items[0]).toMatchObject({ kind: 'user', attachments: [att] });
+    expect(v.items[1]).not.toHaveProperty('attachments');
+  });
+
   it('ignores a seq it has already seen, so a replay cannot double messages', () => {
     const v = newView('s');
     expect(applyEvent(v, 1, 0, { k: 'user', text: 'hi' })).toBe(true);

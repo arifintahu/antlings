@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { STATE_LABEL } from '../ants/draw.js';
   import { counts, fmtK, isBusy, level } from '../lib/model.js';
   import { MODES, prettyModel, showPath } from '../lib/options.js';
+  import { ACCEPT, pastedName } from '../lib/attach.js';
   import { app, titleOf } from '../lib/store.svelte.js';
+  import { AttachmentTray } from '../lib/tray.svelte.js';
+  import AttachmentChips from './AttachmentChips.svelte';
   import AgentDetail from './AgentDetail.svelte';
   import Conversation from './Conversation.svelte';
   import NewSession from './NewSession.svelte';
@@ -23,6 +26,10 @@
   let confirmDelete = $state(false);
   let deleting = $state(false);
   let prompt = $state('');
+  const tray = new AttachmentTray();
+  let fileInput: HTMLInputElement | undefined = $state();
+  let dropping = $state(false);
+  let dragDepth = 0;
   let chatEl: HTMLElement | undefined = $state();
   let delDlg: HTMLDialogElement;
   let desktop = $state(false);
@@ -130,15 +137,68 @@
     void tick().then(() => chatEl && (chatEl.scrollTop = app.focus === 'lead' ? chatEl.scrollHeight : 0));
   });
 
+  // Files not sent belong to the session they were attached in.
+  $effect(() => {
+    void app.activeId;
+    untrack(() => tray.reset());
+  });
+
+  // The server refused an attachment that expired: the typed text comes back so it is not lost.
+  $effect(() => {
+    if (!app.restoreText) return;
+    prompt = app.restoreText;
+    app.restoreText = '';
+  });
+
+  function addFiles(files: File[]) {
+    if (!files.length || composerOff || !app.activeId) return;
+    tray.add(files, app.activeId, (name) => app.say(`Attached ${name}`));
+  }
+
+  function paste(ev: ClipboardEvent) {
+    const files = [...(ev.clipboardData?.files ?? [])];
+    if (!files.length || composerOff) return;
+    // Text that was copied with the image still pastes as text.
+    if (!ev.clipboardData?.getData('text/plain')) ev.preventDefault();
+    addFiles(files.map((f) => (f.type.startsWith('image/') ? new File([f], pastedName(f, new Date()), { type: f.type }) : f)));
+  }
+
+  const hasFiles = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('Files');
+  function dragEnter(ev: DragEvent) {
+    if (!hasFiles(ev) || composerOff) return;
+    ev.preventDefault();
+    dragDepth += 1;
+    dropping = true;
+  }
+  function dragOver(ev: DragEvent) {
+    if (hasFiles(ev) && !composerOff) ev.preventDefault();
+  }
+  function dragLeave() {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) dropping = false;
+  }
+  function drop(ev: DragEvent) {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    dragDepth = 0;
+    dropping = false;
+    addFiles([...(ev.dataTransfer?.files ?? [])]);
+  }
+
   function submit(ev: SubmitEvent) {
     ev.preventDefault();
     const text = prompt.trim();
-    if (!text || composerOff) return;
+    const ids = tray.ids;
+    if ((!text && ids.length === 0) || composerOff || tray.busy) return;
+    const body = text || 'See the attached file(s).';
     const sent = app.send(
-      ant ? `Continue the "${ant.subagentType}" subagent ("${ant.description}") with this follow-up: ${text}` : text,
+      ant ? `Continue the "${ant.subagentType}" subagent ("${ant.description}") with this follow-up: ${body}` : text,
+      ids,
     );
-    if (!sent) return; // keep the text so it is not lost
+    if (!sent) return; // keep the text and the files so nothing is lost
+    if (ant) app.lastDraft = text;
     prompt = '';
+    tray.clear();
     follow = true;
     void tick().then(() => chatEl && (chatEl.scrollTop = chatEl.scrollHeight));
     if (ant) app.focus = 'lead';
@@ -349,7 +409,10 @@
         </div>
       {/if}
       <div class="body" bind:this={bodyEl}>
-      <div class="col" hidden={termOpen && !desktop}>
+      <!-- A drop target has no keyboard role; the paperclip button is the keyboard way to attach. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="col" hidden={termOpen && !desktop} ondragenter={dragEnter} ondragover={dragOver} ondragleave={dragLeave} ondrop={drop}>
+      {#if dropping}<div class="dropzone" aria-hidden="true">Drop to attach</div>{/if}
       <Office {view} />
       <main class="chat" id="chat" bind:this={chatEl} aria-label={ant ? `Subagent ${ant.subagentType}` : 'Conversation'} tabindex="-1" onscroll={() => { if (chatEl && chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 200) follow = false; }}>
         {#if ant}<AgentDetail {ant} />{:else}<Conversation {view} {archived} />{/if}
@@ -358,9 +421,15 @@
         {/if}
       </main>
       <form class="composer" onsubmit={submit}>
+        {#if tray.items.length}<AttachmentChips items={tray.items} onremove={(k) => tray.remove(k)} />{/if}
+        {#if tray.error}<p class="attach-err" role="alert">{tray.error}</p>{/if}
+        <input bind:this={fileInput} type="file" multiple hidden accept={ACCEPT} onchange={(e) => { addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
+        <button class="btn" type="button" aria-label="Attach file" disabled={composerOff} onclick={() => fileInput?.click()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11l-8 8a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8-8" /></svg>
+        </button>
         <label class="sr" for="prompt">Message</label>
-        <textarea id="prompt" rows="1" {placeholder} enterkeyhint="send" disabled={composerOff} bind:value={prompt} onkeydown={keydown}></textarea>
-        <button class="btn primary" type="submit" aria-label="Send" disabled={composerOff || !prompt.trim()}>
+        <textarea id="prompt" rows="1" {placeholder} enterkeyhint="send" disabled={composerOff} bind:value={prompt} onkeydown={keydown} onpaste={paste}></textarea>
+        <button class="btn primary" type="submit" aria-label="Send" disabled={composerOff || tray.busy || (!prompt.trim() && tray.ready.length === 0)}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
         </button>
       </form>

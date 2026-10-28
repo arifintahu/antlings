@@ -3,14 +3,19 @@ import type { SocketStatus } from './socket.js';
 
 const h = vi.hoisted(() => ({
   onStatus: undefined as undefined | ((s: SocketStatus) => void),
+  onMessage: undefined as undefined | ((m: unknown) => void),
   get: undefined as undefined | ReturnType<typeof import('vitest').vi.fn>,
 }));
 
 vi.mock('./socket.js', () => ({
   Socket: class {
     status = 'down';
-    constructor(handlers: { onStatus: (s: SocketStatus) => void }) {
+    constructor(handlers: { onStatus: (s: SocketStatus) => void; onMessage: (m: unknown) => void }) {
       h.onStatus = handlers.onStatus;
+      h.onMessage = handlers.onMessage;
+    }
+    send() {
+      return true;
     }
     start() {}
     stop() {}
@@ -49,5 +54,19 @@ describe('reconnect', () => {
     h.onStatus!('down');
     h.onStatus!('connecting');
     expect(h.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('attachments that expired', () => {
+  it('puts the unsent text back so a long prompt is not lost', () => {
+    app.activeId = 's';
+    expect(app.send('a long prompt', ['u1'])).toBe(true);
+    h.onMessage!({
+      t: 'error',
+      code: 'attachment_expired',
+      message: 'An attached file is no longer on the server.',
+    });
+    expect(app.restoreText).toBe('a long prompt');
+    expect(app.banner).toBe('An attached file is no longer on the server.');
   });
 });

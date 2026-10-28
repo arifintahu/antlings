@@ -792,6 +792,7 @@ textarea:disabled {
 }
 .composer {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   padding-bottom: calc(8px + env(safe-area-inset-bottom));
@@ -1821,6 +1822,7 @@ a.btn {
   display: flex;
 }
 .col {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1978,4 +1980,88 @@ a.btn {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
+}
+
+/* attachments */
+.tray {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 4px 0 8px;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+}
+.tray.sent {
+  margin-top: 6px;
+}
+.tray.sent .chip {
+  min-height: 40px;
+  padding-right: 8px;
+}
+.chip .thumb {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  object-fit: cover;
+  background: var(--line);
+}
+.chip .ficon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: square;
+}
+.chip .nm {
+  min-width: 0;
+  max-width: min(40vw, 22ch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip .sz,
+.chip .st {
+  flex: none;
+  color: var(--muted);
+  font-size: 17px;
+  white-space: nowrap;
+}
+.chip.err {
+  border-color: var(--red);
+}
+.chip.err .ficon,
+.chip.err .st {
+  color: var(--red);
+}
+.attach-err {
+  flex: 0 0 100%;
+  margin: 0;
+  color: var(--red);
+  font-size: 18px;
+}
+.dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--blue);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--fg);
+  font-size: 24px;
+  pointer-events: none;
 }
