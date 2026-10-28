@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { FakePtyFactory } from './terminals/fakePty.js';
 import { Terminals } from './terminals/registry.js';
 import { wireApp } from './wiring.js';
+import { Uploads } from './uploads.js';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -72,6 +73,7 @@ export interface Kit {
   app: FastifyInstance;
   mgr: SessionManager;
   terms: Terminals;
+  uploads: Uploads;
   pty: FakePtyFactory;
   push: PushService;
   connections: Connections;
@@ -130,6 +132,8 @@ export async function makeKit(
   const config = testConfig({ ANTLINGS_HOME: homeDir, ...env });
   const folders = new Folders(homeDir);
   const auth = new Auth(openDb(':memory:'), clock, config, fakeWebAuthn, (l) => logs.push(l));
+  const uploadsDir = mkdtempSync(join(tmpdir(), 'antlings-up-'));
+  const uploads = new Uploads(auth.db, uploadsDir, clock);
   const agents = new FakeAgents();
   const transcripts = new FakeTranscripts();
   const pushSent: Kit['pushSent'] = [];
@@ -149,6 +153,7 @@ export async function makeKit(
     config,
     agents,
     transcripts,
+    uploads,
     audit: (kind, detail) => auth.audit(kind, undefined, detail),
     notifier: push,
   });
@@ -176,8 +181,11 @@ export async function makeKit(
   const app = await buildApp({
     auth,
     extend: (a) => {
-      wireApp(a, { auth, mgr, folders, transcripts, connections, terms, push });
-      a.addHook('onClose', async () => rmSync(homeDir, { recursive: true, force: true }));
+      wireApp(a, { auth, mgr, folders, transcripts, connections, terms, push, uploads });
+      a.addHook('onClose', async () => {
+        rmSync(homeDir, { recursive: true, force: true });
+        rmSync(uploadsDir, { recursive: true, force: true });
+      });
     },
     ...over,
   });
@@ -292,6 +300,7 @@ export async function makeKit(
     app,
     mgr,
     terms,
+    uploads,
     pty,
     push,
     connections,

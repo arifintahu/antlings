@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS session_meta (
   id TEXT PRIMARY KEY, cwd TEXT NOT NULL, model TEXT NOT NULL, effort TEXT, mode TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS session_pins (id TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS uploads (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, kind TEXT NOT NULL,
+  mime TEXT NOT NULL, file TEXT NOT NULL, created_at INTEGER NOT NULL, sent INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS uploads_session ON uploads (session_id);
 CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL);
 `;
 

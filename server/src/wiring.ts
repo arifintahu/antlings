@@ -7,6 +7,8 @@ import type { Folders } from './folders.js';
 import { registerPushRoutes, type PushService } from './push.js';
 import { registerStatusRoutes } from './status.js';
 import { ownedSession, registerSessionRoutes } from './sessionRoutes.js';
+import { registerUploadRoutes } from './uploadRoutes.js';
+import type { Uploads } from './uploads.js';
 import type { Terminals } from './terminals/registry.js';
 import { registerTerminalRoutes } from './terminals/routes.js';
 import { attachTerminalSocket } from './terminals/ws.js';
@@ -22,12 +24,14 @@ export interface Wiring {
   connections: Connections;
   terms: Terminals;
   push?: PushService;
+  uploads: Uploads;
 }
 
 /** Adds the session routes and the WebSocket endpoint to an app built by `buildApp`. */
 export function wireApp(app: FastifyInstance, w: Wiring): { wss: WebSocketServer; termWss: WebSocketServer } {
   registerSessionRoutes(app, { mgr: w.mgr, folders: w.folders, transcripts: w.transcripts, terms: w.terms });
   const owned = ownedSession({ mgr: w.mgr, folders: w.folders, transcripts: w.transcripts });
+  registerUploadRoutes(app, { uploads: w.uploads, owned });
   registerTerminalRoutes(app, { terms: w.terms, owned });
   const termWss = attachTerminalSocket(app, w.auth, w.terms, owned);
   const wss = attachWebSocket(app, w.auth, w.mgr, w.transcripts);
