@@ -181,3 +181,49 @@ test('file chips have no state marker square', async ({ page }) => {
     .evaluate((el) => getComputedStyle(el, '::before').content);
   expect(marker).toBe('none');
 });
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+
+  test('the paperclip is on screen, opens the picker and the file uploads', async ({ page }) => {
+    const btn = page.getByRole('button', { name: 'Attach file' });
+    await expect(btn).toBeVisible();
+    const box = (await btn.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), btn.tap()]);
+    await chooser.setFiles(png());
+    await expect(chip(page, 'shot.png')).toContainText('Ready');
+  });
+
+  const LONG = 'Screenshot_2026-10-28-18-29-12-123456789_with_a_long_name';
+
+  test('an uploading chip and a refused chip stay inside the screen, remove button included', async ({
+    page,
+  }) => {
+    await page.route('**/api/sessions/*/uploads', () => undefined); // never answers: the upload stays "Uploading"
+    await attach(page, [{ ...png(`${LONG}.png`) }, text(`${LONG}.exe`, 'MZ')]);
+    await expect(chip(page, `${LONG}.png`)).toContainText('Uploading');
+    await expect(chip(page, `${LONG}.exe`)).toContainText('Not attached');
+    for (const name of [`${LONG}.png`, `${LONG}.exe`]) {
+      const c = chip(page, name);
+      const box = (await c.boundingBox())!;
+      const rm = (await page.getByRole('button', { name: `Remove ${name}` }).boundingBox())!;
+      expect(box.x + box.width, `${name} chip right edge`).toBeLessThanOrEqual(375);
+      expect(rm.x + rm.width, `${name} remove button right edge`).toBeLessThanOrEqual(375);
+    }
+  });
+});
+
+test('a file picked while the connection is down is still attached', async ({ page, context }) => {
+  // On a phone the page is suspended while the system picker is open and the socket drops.
+  await context.setOffline(true);
+  await page.request.post('http://localhost:3199/__e2e/drop-sockets', {
+    headers: { origin: 'http://localhost:3199' },
+  });
+  await expect(page.getByText('Offline. Reconnecting…')).toBeVisible({ timeout: 10_000 });
+  await attach(page, png());
+  await expect(chip(page, 'shot.png')).toBeVisible();
+  await context.setOffline(false);
+});
