@@ -7,7 +7,7 @@
     "type": "git",
     "url": "git+https://github.com/arifintahu/antlings.git"
   },
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "engines": {
     "node": ">=24"
