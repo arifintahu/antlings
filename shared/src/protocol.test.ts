@@ -12,6 +12,17 @@ describe('ClientMessage', () => {
       false,
     );
   });
+  it('allows empty text only with attachments, and at most five', () => {
+    const base = { t: 'send', sessionId: 's1' };
+    expect(ClientMessage.safeParse({ ...base, text: '', attachmentIds: ['u1'] }).success).toBe(true);
+    expect(ClientMessage.safeParse({ ...base, text: '   ' }).success).toBe(false);
+    expect(
+      ClientMessage.safeParse({ ...base, text: 'hi', attachmentIds: ['1', '2', '3', '4', '5'] }).success,
+    ).toBe(true);
+    expect(
+      ClientMessage.safeParse({ ...base, text: 'hi', attachmentIds: ['1', '2', '3', '4', '5', '6'] }).success,
+    ).toBe(false);
+  });
   it('rejects a negative lastSeq', () => {
     expect(ClientMessage.safeParse({ t: 'hello', sessionId: 's1', lastSeq: -1 }).success).toBe(false);
   });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PERMISSION_MODES } from './api.js';
+import { MAX_FILES, type AttachmentRef } from './attachments.js';
 
 const Id = z.string().min(1).max(200);
 const SessionId = Id;
@@ -7,7 +8,14 @@ const SessionId = Id;
 /** Messages the browser sends over the WebSocket. Every inbound message is parsed with this schema. */
 export const ClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('hello'), sessionId: SessionId, lastSeq: z.number().int().min(0) }),
-  z.object({ t: z.literal('send'), sessionId: SessionId, text: z.string().min(1).max(100_000) }),
+  z
+    .object({
+      t: z.literal('send'),
+      sessionId: SessionId,
+      text: z.string().max(100_000),
+      attachmentIds: z.array(Id).max(MAX_FILES).optional(),
+    })
+    .refine((m) => m.text.trim().length > 0 || (m.attachmentIds?.length ?? 0) > 0),
   z.object({
     t: z.literal('approve'),
     sessionId: SessionId,
@@ -46,7 +54,7 @@ export interface TaskUsage {
 
 /** Events the server stores in the event log and streams to the browser. */
 export type UiEvent =
-  | { k: 'user'; text: string }
+  | { k: 'user'; text: string; attachments?: AttachmentRef[] }
   | { k: 'assistant_text'; text: string; parentToolUseId?: string }
   | { k: 'tool_use'; toolUseId: string; name: string; input: unknown; parentToolUseId?: string }
   | { k: 'tool_result'; toolUseId: string; ok: boolean; text: string; parentToolUseId?: string }
