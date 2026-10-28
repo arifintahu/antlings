@@ -181,3 +181,19 @@ test('file chips have no state marker square', async ({ page }) => {
     .evaluate((el) => getComputedStyle(el, '::before').content);
   expect(marker).toBe('none');
 });
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+
+  test('the paperclip is on screen, opens the picker and the file uploads', async ({ page }) => {
+    const btn = page.getByRole('button', { name: 'Attach file' });
+    await expect(btn).toBeVisible();
+    const box = (await btn.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), btn.tap()]);
+    await chooser.setFiles(png());
+    await expect(chip(page, 'shot.png')).toContainText('Ready');
+  });
+});

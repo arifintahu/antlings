@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_FILE_BYTES } from '@antlings/shared';
-import { pastedName, precheck } from './attach.js';
+import { ACCEPT, pastedName, precheck } from './attach.js';
 
 describe('precheck', () => {
   it('accepts a file of exactly 5 MB', () => {
@@ -36,5 +36,15 @@ describe('pastedName', () => {
     expect(pastedName({ type: 'image/jpeg' }, now)).toBe('pasted-image-14-02-03.jpg');
     expect(pastedName({ type: 'image/webp' }, now)).toBe('pasted-image-14-02-03.webp');
     expect(pastedName({ type: '' }, now)).toBe('pasted-image-14-02-03.png');
+  });
+});
+
+describe('ACCEPT', () => {
+  it('names image and pdf types, so a phone offers its photo library, as well as extensions', () => {
+    const parts = ACCEPT.split(',');
+    for (const t of ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/*'])
+      expect(parts).toContain(t);
+    expect(parts).toContain('.md');
+    expect(parts).toContain('.ts');
   });
 });

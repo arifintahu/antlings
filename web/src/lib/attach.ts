@@ -43,7 +43,17 @@ export function pastedName(file: { type: string }, now: Date): string {
   return `pasted-image-${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}.${EXT[file.type] ?? 'png'}`;
 }
 
-/** The `accept` list of the file picker. The server checks the content again. */
-export const ACCEPT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', ...TEXT_EXTENSIONS]
-  .map((e) => `.${e}`)
-  .join(',');
+/**
+ * The `accept` list of the file picker. Phones need MIME types to offer the photo library and camera;
+ * extensions alone only open the file browser. HEIC is left out on purpose, so iOS converts photos to JPEG.
+ * The server checks the content again.
+ */
+export const ACCEPT = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/*',
+  ...['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', ...TEXT_EXTENSIONS].map((e) => `.${e}`),
+].join(',');
