@@ -1,6 +1,6 @@
 import { kindFromName, sanitizeName, type AttachmentRef } from '@antlings/shared';
-import { ApiError, del, upload } from './api.js';
-import { precheck, type TrayItem } from './attach.js';
+import { del, upload } from './api.js';
+import { precheck, uploadErrorText, type TrayItem } from './attach.js';
 
 /** The files attached to the message being written. Each file uploads as soon as it is added. */
 export class AttachmentTray {
@@ -56,7 +56,7 @@ export class AttachmentTray {
         })
         .catch((e: unknown) => {
           if (e instanceof DOMException && e.name === 'AbortError') return;
-          const msg = e instanceof ApiError ? e.message : 'The upload failed. Remove the file and try again.';
+          const msg = uploadErrorText(e);
           this.patch(key, { state: 'error', error: msg });
           this.error = msg;
         })
