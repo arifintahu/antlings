@@ -111,6 +111,8 @@ test -L /opt/antlings/previous && sudo ln -sfn "$(readlink /opt/antlings/previou
 sudo systemctl restart antlings
 ```
 
+After a healthy start the installer deletes every release except `current` and `previous`, and the older tarballs next to the new one (about 170 MB per release).
+
 Back up the database before an update. v0.1 only adds tables, but a later release may change columns, and then an older release cannot read the new database.
 
 Test a new Agent SDK version with `ANTLINGS_LIVE=1 pnpm --filter @antlings/server test` before building a release. The SDK version is pinned.

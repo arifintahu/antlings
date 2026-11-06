@@ -409,6 +409,19 @@ if [ "$DRY" -eq 0 ]; then
     exit 1
   fi
   systemctl show antlings -p MemoryCurrent | sed 's/^/    /'
+  # Only after a healthy start: keep the `current` and `previous` releases, delete the rest and the
+  # older uploaded tarballs (about 170 MB per release).
+  if [ -n "$RELEASE" ]; then
+    keep_cur=$(readlink -f "$INSTALL_DIR/current" || true)
+    keep_prev=$(readlink -f "$INSTALL_DIR/previous" 2>/dev/null || true)
+    for d in "$INSTALL_DIR"/releases/*/; do
+      d=${d%/}
+      if [ "$d" != "$keep_cur" ] && [ "$d" != "$keep_prev" ]; then rm -rf -- "$d"; note "removed old release $(basename "$d")"; fi
+    done
+    for f in "$(dirname "$RELEASE")"/antlings-*.tar.gz; do
+      if [ "$(basename "$f")" != "$(basename "$RELEASE")" ] && [ -f "$f" ]; then rm -f -- "$f" "$f.sha256"; fi
+    done
+  fi
 fi
 
 step "Next steps (you do these, nothing here did)"
